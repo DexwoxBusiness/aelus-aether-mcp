@@ -36,7 +36,88 @@ const FindRelatedConceptsSchema = z.object({
 
 /**
  * POST /api/semantic/search
- * Semantic code search
+ * Semantic code search with optional re-ranking (Phase 3 & 4)
+ *
+ * @swagger
+ * /api/semantic/search:
+ *   post:
+ *     summary: Semantic code search
+ *     description: Search code semantically using Voyage AI embeddings with optional two-stage retrieval using re-ranker
+ *     tags: [Semantic]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - query
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 description: Natural language search query
+ *                 example: "authentication middleware with JWT"
+ *               limit:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Maximum results to return
+ *                 example: 10
+ *               useReranker:
+ *                 type: boolean
+ *                 default: false
+ *                 description: Enable two-stage retrieval with re-ranking (Phase 4)
+ *                 example: true
+ *               rerankTopK:
+ *                 type: integer
+ *                 description: Number of candidates to re-rank (should be 2-3x limit)
+ *                 example: 30
+ *           examples:
+ *             basic:
+ *               summary: Basic semantic search
+ *               value:
+ *                 query: "error handling functions"
+ *                 limit: 5
+ *             with_reranking:
+ *               summary: Search with re-ranking for best quality
+ *               value:
+ *                 query: "database connection pooling"
+ *                 limit: 10
+ *                 useReranker: true
+ *                 rerankTopK: 30
+ *     responses:
+ *       200:
+ *         description: Search results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           score:
+ *                             type: number
+ *                           source:
+ *                             type: string
+ *                           content:
+ *                             type: string
+ *                           metadata:
+ *                             type: object
+ *                 meta:
+ *                   type: object
+ *       400:
+ *         description: Validation error
+ *       503:
+ *         description: Semantic search not enabled
  */
 router.post(
   "/search",
@@ -56,7 +137,53 @@ router.post(
 
 /**
  * POST /api/semantic/similar
- * Find similar code
+ * Find code similar to a given snippet
+ *
+ * @swagger
+ * /api/semantic/similar:
+ *   post:
+ *     summary: Find similar code
+ *     description: Find code similar to a given code snippet using embedding similarity
+ *     tags: [Semantic]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 description: Code snippet to find similar code for
+ *                 example: "function validateEmail(email) { return /^[^\\s@]+@/.test(email); }"
+ *               threshold:
+ *                 type: number
+ *                 default: 0.5
+ *                 minimum: 0
+ *                 maximum: 1
+ *                 description: Minimum similarity score (0-1)
+ *                 example: 0.7
+ *               limit:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Maximum results to return
+ *                 example: 10
+ *           examples:
+ *             email_validation:
+ *               summary: Find similar email validation code
+ *               value:
+ *                 code: "function validateEmail(email) { return /^[^\\s@]+@/.test(email); }"
+ *                 threshold: 0.7
+ *                 limit: 5
+ *     responses:
+ *       200:
+ *         description: Similar code results
+ *       400:
+ *         description: Validation error
+ *       503:
+ *         description: Semantic search not enabled
  */
 router.post(
   "/similar",
