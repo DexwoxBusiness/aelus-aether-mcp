@@ -6,6 +6,7 @@ import { MemoryProvider } from "./memory-provider.js";
 import { OllamaProvider } from "./ollama-provider.js";
 import { OpenAIProvider } from "./openai-provider.js";
 import { TransformersProvider } from "./transformers-provider.js";
+import { VoyageProvider } from "./voyage-provider.js";
 
 export interface ProviderFactoryOptions {
   provider: ProviderKind;
@@ -35,6 +36,14 @@ export interface ProviderFactoryOptions {
     apiKey?: string;
     timeoutMs?: number;
     concurrency?: number;
+    maxBatchSize?: number;
+  };
+  voyage?: {
+    baseUrl?: string;
+    apiKey?: string;
+    timeoutMs?: number;
+    concurrency?: number;
+    inputType?: "query" | "document";
     maxBatchSize?: number;
   };
 }
@@ -86,6 +95,20 @@ export function createProvider(opts: ProviderFactoryOptions): EmbeddingProvider 
         maxBatchSize: opts.cloudru?.maxBatchSize,
         logger: makeProviderLogger(appLogger, "PROVIDER_CLOUDRU"),
       });
+
+    case "voyage":
+      if (!opts.voyage?.apiKey) throw new Error("Voyage AI apiKey is required");
+      return new VoyageProvider({
+        model: opts.modelName,
+        apiKey: opts.voyage.apiKey,
+        baseUrl: opts.voyage.baseUrl,
+        timeoutMs: opts.voyage.timeoutMs,
+        concurrency: opts.voyage.concurrency,
+        inputType: opts.voyage.inputType,
+        maxBatchSize: opts.voyage.maxBatchSize,
+        logger: makeProviderLogger(appLogger, "PROVIDER_VOYAGE"),
+      });
+
     default:
       return new MemoryProvider({ dimension: opts.memory?.dimension });
   }
