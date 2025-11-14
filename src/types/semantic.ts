@@ -121,6 +121,9 @@ export interface FusionOptions {
   structuralWeight: number;
   semanticWeight: number;
   limit: number;
+  // Reranker options
+  useReranker?: boolean; // Enable re-ranking (default false)
+  rerankTopK?: number; // Number of results to rerank (default: limit * 2)
 }
 
 /**
