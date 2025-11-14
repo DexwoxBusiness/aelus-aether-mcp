@@ -28,6 +28,7 @@ import graphRoutes from "./routes/graph.js";
 // Import route modules
 import indexRoutes from "./routes/index.js";
 import lernaRoutes from "./routes/lerna.js";
+import projectsRoutes from "./routes/projects.js";
 import semanticRoutes from "./routes/semantic.js";
 import { swaggerSpec, swaggerUiOptions } from "./swagger.js";
 
@@ -75,6 +76,18 @@ function createApp(): Express {
       documentation: "/api-docs",
       health: "/health",
       endpoints: {
+        projects: [
+          "POST   /api/projects",
+          "GET    /api/projects",
+          "GET    /api/projects/:id",
+          "PATCH  /api/projects/:id",
+          "DELETE /api/projects/:id",
+          "GET    /api/projects/:id/stats",
+          "POST   /api/projects/:id/repositories",
+          "GET    /api/projects/:id/repositories",
+          "DELETE /api/projects/:projectId/repositories/:repositoryId",
+          "POST   /api/projects/:id/search",
+        ],
         indexing: ["POST /api/index", "POST /api/index/clean"],
         semantic: [
           "POST /api/semantic/search",
@@ -117,6 +130,7 @@ function createApp(): Express {
   app.use("/api/graph", graphRoutes);
   app.use("/api/agents", agentsRoutes);
   app.use("/api/lerna", lernaRoutes);
+  app.use("/api/projects", projectsRoutes);
 
   // ===== Error Handling =====
   // 404 handler

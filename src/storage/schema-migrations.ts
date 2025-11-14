@@ -20,7 +20,7 @@ import type { SQLiteManager } from "./sqlite-manager.js";
 // 2. CONSTANTS AND CONFIGURATION
 // =============================================================================
 const MIGRATIONS_TABLE = "migrations";
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 // =============================================================================
 // 3. DATA MODELS AND TYPE DEFINITIONS
@@ -290,6 +290,110 @@ export const migrations: Migration[] = [
       DROP INDEX IF EXISTS idx_perf_created;
       DROP INDEX IF EXISTS idx_cache_accessed;
       DROP INDEX IF EXISTS idx_cache_hits;
+    `,
+  },
+  {
+    version: 3,
+    description: "Phase 2: Multi-repository support with project management",
+    up: `
+      -- Projects table for managing multiple repositories
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        metadata TEXT  -- JSON: {owner, tags, settings, etc.}
+      );
+
+      -- Index for project queries
+      CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
+      CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at);
+
+      -- Project repositories table for tracking repos within a project
+      CREATE TABLE IF NOT EXISTS project_repositories (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        repository_path TEXT NOT NULL,
+        repository_name TEXT NOT NULL,
+        added_at INTEGER NOT NULL,
+        last_indexed INTEGER,
+        metadata TEXT,  -- JSON: {branch, commit, stats, etc.}
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        UNIQUE(project_id, repository_path)
+      );
+
+      -- Indexes for repository queries
+      CREATE INDEX IF NOT EXISTS idx_repo_project ON project_repositories(project_id);
+      CREATE INDEX IF NOT EXISTS idx_repo_path ON project_repositories(repository_path);
+      CREATE INDEX IF NOT EXISTS idx_repo_indexed ON project_repositories(last_indexed);
+
+      -- Add project_id to entities table
+      ALTER TABLE entities ADD COLUMN project_id TEXT DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_entities_project ON entities(project_id);
+      CREATE INDEX IF NOT EXISTS idx_entities_project_type ON entities(project_id, type);
+      CREATE INDEX IF NOT EXISTS idx_entities_project_file ON entities(project_id, file_path);
+
+      -- Add project_id to relationships table
+      ALTER TABLE relationships ADD COLUMN project_id TEXT DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_rel_project ON relationships(project_id);
+      CREATE INDEX IF NOT EXISTS idx_rel_project_type ON relationships(project_id, type);
+
+      -- Add project_id to files table
+      ALTER TABLE files ADD COLUMN project_id TEXT DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_files_project ON files(project_id);
+      CREATE INDEX IF NOT EXISTS idx_files_project_indexed ON files(project_id, last_indexed);
+
+      -- Add project_id to embeddings table
+      ALTER TABLE embeddings ADD COLUMN project_id TEXT DEFAULT NULL;
+      CREATE INDEX IF NOT EXISTS idx_embeddings_project ON embeddings(project_id);
+      CREATE INDEX IF NOT EXISTS idx_embeddings_project_entity ON embeddings(project_id, entity_id);
+
+      -- Project statistics view for quick insights
+      CREATE VIEW IF NOT EXISTS project_stats AS
+      SELECT
+        p.id as project_id,
+        p.name as project_name,
+        COUNT(DISTINCT pr.id) as repository_count,
+        COUNT(DISTINCT e.id) as entity_count,
+        COUNT(DISTINCT f.path) as file_count,
+        COUNT(DISTINCT em.id) as embedding_count,
+        MAX(pr.last_indexed) as last_indexed
+      FROM projects p
+      LEFT JOIN project_repositories pr ON p.id = pr.project_id
+      LEFT JOIN entities e ON p.id = e.project_id
+      LEFT JOIN files f ON p.id = f.project_id
+      LEFT JOIN embeddings em ON p.id = em.project_id
+      GROUP BY p.id, p.name;
+    `,
+    down: `
+      -- Drop project statistics view
+      DROP VIEW IF EXISTS project_stats;
+
+      -- Remove project_id from embeddings
+      DROP INDEX IF EXISTS idx_embeddings_project;
+      DROP INDEX IF EXISTS idx_embeddings_project_entity;
+
+      -- SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+      -- For the down migration, we'll just drop the indexes
+      -- In production, you'd need to recreate tables without the column
+
+      -- Remove project_id from files
+      DROP INDEX IF EXISTS idx_files_project;
+      DROP INDEX IF EXISTS idx_files_project_indexed;
+
+      -- Remove project_id from relationships
+      DROP INDEX IF EXISTS idx_rel_project;
+      DROP INDEX IF EXISTS idx_rel_project_type;
+
+      -- Remove project_id from entities
+      DROP INDEX IF EXISTS idx_entities_project;
+      DROP INDEX IF EXISTS idx_entities_project_type;
+      DROP INDEX IF EXISTS idx_entities_project_file;
+
+      -- Drop repository tables
+      DROP TABLE IF EXISTS project_repositories;
+      DROP TABLE IF EXISTS projects;
     `,
   },
 ];
