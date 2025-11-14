@@ -21,6 +21,7 @@ import type { EmbeddingGenerator } from "./embedding-generator.js";
 // 1. IMPORTS AND DEPENDENCIES
 // =============================================================================
 import type { VectorStore } from "./vector-store.js";
+import type { VoyageReranker } from "./voyage-reranker.js";
 
 // =============================================================================
 // 2. CONSTANTS AND CONFIGURATION
@@ -85,16 +86,23 @@ export class HybridSearchEngine {
   private vectorStore: VectorStore;
   private embeddingGen: EmbeddingGenerator;
   private queryAgent: QueryAgent | null = null;
+  private reranker: VoyageReranker | null = null;
   private searchMetrics = {
     totalSearches: 0,
     avgSearchTime: 0,
     avgResultCount: 0,
   };
 
-  constructor(vectorStore: VectorStore, embeddingGen: EmbeddingGenerator, queryAgent?: QueryAgent) {
+  constructor(
+    vectorStore: VectorStore,
+    embeddingGen: EmbeddingGenerator,
+    queryAgent?: QueryAgent,
+    reranker?: VoyageReranker,
+  ) {
     this.vectorStore = vectorStore;
     this.embeddingGen = embeddingGen;
     this.queryAgent = queryAgent || null;
+    this.reranker = reranker || null;
   }
 
   /**
@@ -102,6 +110,13 @@ export class HybridSearchEngine {
    */
   setQueryAgent(queryAgent: QueryAgent): void {
     this.queryAgent = queryAgent;
+  }
+
+  /**
+   * Set the reranker for improved search relevance
+   */
+  setReranker(reranker: VoyageReranker): void {
+    this.reranker = reranker;
   }
 
   /**
@@ -126,7 +141,13 @@ export class HybridSearchEngine {
       );
 
       // Apply Reciprocal Rank Fusion
-      const fusedResults = this.fuseResults(structuralResults, semanticResults, fusionOptions);
+      let fusedResults = this.fuseResults(structuralResults, semanticResults, fusionOptions);
+
+      // Apply re-ranking if enabled and available
+      if (fusionOptions.useReranker && this.reranker && fusedResults.length > 0) {
+        console.log(`[HybridSearch] Applying re-ranking to ${fusedResults.length} results`);
+        fusedResults = await this.applyReranking(query, fusedResults, fusionOptions);
+      }
 
       // Update metrics
       const searchTime = Date.now() - startTime;
@@ -252,6 +273,67 @@ export class HybridSearchEngine {
       return "structural";
     } else {
       return "semantic";
+    }
+  }
+
+  /**
+   * Apply re-ranking to improve search result relevance
+   */
+  private async applyReranking(
+    query: string,
+    results: HybridResult[],
+    options: FusionOptions,
+  ): Promise<HybridResult[]> {
+    if (!this.reranker) {
+      return results;
+    }
+
+    try {
+      // Determine how many results to rerank
+      const topK = options.rerankTopK ?? Math.min(results.length, options.limit * 2);
+      const toRerank = results.slice(0, topK);
+
+      // Extract documents for reranking (use content or construct from metadata)
+      const documents = toRerank.map((r) => {
+        if (r.content) {
+          return r.content;
+        }
+        // Fallback: construct document from metadata
+        const meta = r.metadata || {};
+        return `${meta.name || ""} ${meta.type || ""} ${meta.path || ""}`.trim();
+      });
+
+      // Rerank
+      const rerankResponse = await this.reranker.rerank(query, documents, {
+        topK: options.limit,
+        returnDocuments: false,
+      });
+
+      // Map reranked results back, preserving original data but updating scores
+      const reranked: HybridResult[] = rerankResponse.results
+        .filter((rerankResult) => rerankResult.index < toRerank.length)
+        .map((rerankResult) => {
+          const original = toRerank[rerankResult.index]!;
+
+          return {
+            id: original.id,
+            score: rerankResult.relevanceScore,
+            source: original.source,
+            content: original.content,
+            metadata: {
+              ...original.metadata,
+              rerankScore: rerankResult.relevanceScore,
+              originalScore: original.score,
+            },
+          };
+        });
+
+      console.log(`[HybridSearch] Re-ranked ${toRerank.length} results, returning top ${reranked.length}`);
+
+      return reranked;
+    } catch (error) {
+      console.error("[HybridSearch] Re-ranking failed, returning original results:", error);
+      return results;
     }
   }
 

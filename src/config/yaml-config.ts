@@ -64,6 +64,13 @@ export interface MCPConfig {
     transformers?: { quantized?: boolean; localPath?: string };
     memory?: { dimension?: number };
   };
+  reranker?: {
+    enabled?: boolean;
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    defaultTopK?: number;
+  };
   server?: { host?: string; port?: number; timeout?: number };
   agents?: {
     maxConcurrent?: number;
@@ -74,6 +81,7 @@ export interface MCPConfig {
   semantic?: {
     cacheWarmupLimit?: number;
     popularEntitiesTopic?: string;
+    useReranker?: boolean;
   };
 }
 
@@ -235,6 +243,11 @@ const DEFAULT_CONFIG: AppConfig = {
       enabled: false,
       fallbackToMemory: true,
     },
+    reranker: {
+      enabled: false,
+      model: "rerank-2",
+      defaultTopK: 20,
+    },
     server: {
       host: "localhost",
       port: 3000,
@@ -250,6 +263,7 @@ const DEFAULT_CONFIG: AppConfig = {
     semantic: {
       cacheWarmupLimit: 50,
       popularEntitiesTopic: "semantic:warmup:entities",
+      useReranker: false,
     },
   },
   database: {
@@ -631,6 +645,21 @@ export class ConfigLoader {
             Number(process.env.MCP_DEV_INDEX_BATCH) ||
             DEFAULT_CONFIG.mcp.agents?.devIndexBatch,
         },
+        reranker: {
+          enabled:
+            yamlConfig.mcp?.reranker?.enabled !== undefined
+              ? yamlConfig.mcp.reranker.enabled
+              : process.env.MCP_RERANKER_ENABLED === "true" || DEFAULT_CONFIG.mcp.reranker?.enabled,
+          model:
+            yamlConfig.mcp?.reranker?.model || process.env.MCP_RERANKER_MODEL || DEFAULT_CONFIG.mcp.reranker?.model,
+          apiKey: yamlConfig.mcp?.reranker?.apiKey || process.env.VOYAGE_API_KEY || process.env.MCP_RERANKER_API_KEY,
+          baseUrl:
+            yamlConfig.mcp?.reranker?.baseUrl || process.env.VOYAGE_BASE_URL || process.env.MCP_RERANKER_BASE_URL,
+          defaultTopK:
+            yamlConfig.mcp?.reranker?.defaultTopK ||
+            Number(process.env.MCP_RERANKER_DEFAULT_TOP_K) ||
+            DEFAULT_CONFIG.mcp.reranker?.defaultTopK,
+        },
         semantic: {
           cacheWarmupLimit:
             yamlConfig.mcp?.semantic?.cacheWarmupLimit !== undefined
@@ -642,6 +671,10 @@ export class ConfigLoader {
             yamlConfig.mcp?.semantic?.popularEntitiesTopic ||
             process.env.MCP_SEMANTIC_WARMUP_TOPIC ||
             DEFAULT_CONFIG.mcp.semantic?.popularEntitiesTopic,
+          useReranker:
+            yamlConfig.mcp?.semantic?.useReranker !== undefined
+              ? yamlConfig.mcp.semantic.useReranker
+              : process.env.MCP_SEMANTIC_USE_RERANKER === "true" || DEFAULT_CONFIG.mcp.semantic?.useReranker,
         },
       },
       database: {
