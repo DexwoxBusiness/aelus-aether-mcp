@@ -1,0 +1,161 @@
+# Default Configuration for Code Graph RAG MCP
+# This file provides default settings for all environments
+# Override specific values in environment-specific config files
+
+# Environment settings
+environment: development
+debug: true
+
+# MCP Server Configuration
+mcp:
+  embedding:
+    # Embedding model configuration
+    model: "default"
+    provider: "memory"  # Options: memory, openai, huggingface, local
+    enabled: false      # Set to true when embedding provider is configured
+    fallbackToMemory: true  # Gracefully fallback to memory-based similarity when model unavailable
+    apiKey: ""          # Set via environment variable MCP_EMBEDDING_API_KEY
+    
+  server:
+    host: "localhost"
+    port: 3000
+    timeout: 30000      # 30 seconds
+    
+  agents:
+    maxConcurrent: 5    # Maximum concurrent agent operations
+    defaultTimeout: 10000  # 10 seconds default timeout for agent tasks
+    useParser: true     # Enable ParserAgent for AST parsing (MCP_USE_PARSER)
+    devIndexBatch: 100  # Batch size for file processing (MCP_DEV_INDEX_BATCH)
+
+# Database Configuration
+database:
+  path: "./vectors.db"
+  mode: "WAL"           # Options: WAL, DELETE, TRUNCATE
+  cacheSize: 10000      # SQLite cache size
+  mmapSize: 268435456   # 256MB memory mapping size
+  synchronous: "NORMAL" # Options: OFF, NORMAL, FULL
+  tempStore: "MEMORY"   # Options: DEFAULT, FILE, MEMORY
+
+# Logging Configuration
+logging:
+  level: "info"         # Options: debug, info, warn, error
+  format: "text"        # Options: json, text
+  enableConsole: true   # Enable console output
+  outputFile: ""        # Optional log file path
+  maxFileSize: "10MB"   # Maximum size per log file
+  maxFiles: 5           # Maximum number of log files to keep
+
+# Parser Configuration
+parser:
+  treeSitter:
+    enabled: true
+    languageConfigs:
+      - "typescript"
+      - "javascript" 
+      - "python"
+      - "c"
+      - "cpp"
+      - "java"
+      - "rust"
+      - "go"
+    maxFileSize: 1048576  # 1MB maximum file size for parsing
+    timeout: 5000         # 5 seconds timeout for parsing operations
+    bufferSize: 1048576   # 1MB buffer size for tree-sitter parser
+    
+  incremental:
+    enabled: true
+    cacheSize: 1000       # Number of parsed files to cache
+    cacheTTL: 300000      # 5 minutes cache TTL
+    
+  agent:
+    maxConcurrency: 4     # Parallel file processing
+    memoryLimit: 256      # MB - memory limit for parser agent
+    priority: 8           # High priority for parsing
+    batchSize: 10         # Files per batch
+    cacheSize: 104857600  # 100MB cache (in bytes)
+    workerPoolSize: 2     # Number of worker threads
+
+# Indexer Configuration
+indexer:
+  maxConcurrency: 2       # Database write operations
+  memoryLimit: 512        # MB for graph operations
+  priority: 7
+  batchSize: 1000
+  cacheSize: 52428800     # 50MB cache (in bytes)
+  cacheTTL: 300000        # 5 minutes (in ms)
+
+# Dev Agent Configuration
+devAgent:
+  maxConcurrency: 3
+  memoryLimit: 256
+  priority: 7
+
+# Dora Agent Configuration
+doraAgent:
+  maxConcurrency: 2
+  memoryLimit: 128
+  priority: 6
+
+# Query Agent Configuration
+queryAgent:
+  maxConcurrency: 10
+  memoryLimit: 112
+  priority: 9
+  simpleQueryTimeout: 100   # ms
+  complexQueryTimeout: 1000  # ms
+  cacheWarmupSize: 100
+
+# Semantic Agent Configuration
+semanticAgent:
+  maxConcurrency: 5
+  memoryLimit: 240
+  priority: 8
+  batchSize: 8
+  modelPath: "./models"
+
+# Coordinator Agent Configuration
+coordinator:
+  maxConcurrency: 100
+  memoryLimit: 128
+  priority: 10
+  taskQueueLimit: 100
+  loadBalancingStrategy: "least-loaded"
+  resourceConstraints:
+    maxMemoryMB: 1024
+    maxCpuPercent: 80
+    maxConcurrentAgents: 10
+    maxTaskQueueSize: 100
+
+# Conductor Orchestrator Configuration
+conductor:
+  maxConcurrency: 100
+  memoryLimit: 128
+  priority: 10
+  taskQueueLimit: 100
+  loadBalancingStrategy: "least-loaded"
+  resourceConstraints:
+    maxMemoryMB: 1024
+    maxCpuPercent: 80
+    maxConcurrentAgents: 10
+    maxTaskQueueSize: 100
+  complexityThreshold: 8
+  mandatoryDelegation: true
+
+# Performance Configuration
+performance:
+  monitoring:
+    enabled: true
+    collectMetrics: true
+    metricsInterval: 60000  # 1 minute metrics collection interval
+    
+  optimization:
+    enableVectorSearch: false  # Enable when sqlite-vec is available
+    enableParallelParsing: true
+    maxWorkerThreads: 4
+    
+# Development Features
+development:
+  enableHotReload: true
+  verboseLogging: true
+  enableDebugEndpoints: true
+  mockExternalServices: false

@@ -1,0 +1,174 @@
+# Development Configuration for Code Graph RAG MCP
+# This file contains development-specific settings
+# Inherits from default.yaml and overrides for local development
+
+# Environment settings
+environment: development
+debug: true
+
+# MCP Server Configuration (Development)
+mcp:
+  embedding:
+    # Development embedding configuration
+    model: "default"
+    provider: "memory"      # Use memory provider for development
+    enabled: false          # Disable by default for faster startup
+    fallbackToMemory: true
+    # No API key needed for memory provider
+    
+  server:
+    host: "localhost"       # Local development only
+    port: 3000             # Standard development port
+    timeout: 15000         # Shorter timeout for quick feedback
+    
+  agents:
+    maxConcurrent: 10      # Allow sufficient agents for parallel operations
+    defaultTimeout: 5000   # Quick timeout for development
+    useParser: true        # Enable ParserAgent for AST parsing (MCP_USE_PARSER)
+    devIndexBatch: 100     # Batch size for file processing (MCP_DEV_INDEX_BATCH)
+
+# Database Configuration (Development)
+database:
+  path: "./vectors.db"     # Local development database
+  mode: "WAL"              # WAL mode for development
+  cacheSize: 5000          # Smaller cache for development
+  mmapSize: 134217728      # 128MB memory mapping
+  synchronous: "NORMAL"    # Normal synchronization
+  tempStore: "MEMORY"      # Memory temp store
+
+# Logging Configuration (Development)
+logging:
+  level: "debug"           # Verbose logging for development
+  format: "text"           # Human-readable text format
+  enableConsole: true      # Always show console output
+  outputFile: ""           # No file logging in development
+  maxFileSize: "10MB"      # Small log files
+  maxFiles: 3              # Keep fewer log files
+
+# Parser Configuration (Development)
+parser:
+  treeSitter:
+    enabled: true
+    languageConfigs:
+      - "typescript"
+      - "javascript"
+      - "python"           # Core languages for development
+      - "c"                # C language support
+      - "cpp"              # C++ language support
+      - "csharp"           # C# language support
+      - "rust"             # Rust language support
+      - "go"               # Go language support
+      - "java"             # Java language support
+      - "vba"              # VBA language support (regex-based)
+    maxFileSize: 524288     # 512KB for quick parsing
+    timeout: 3000          # Quick timeout for development
+    
+  incremental:
+    enabled: true
+    cacheSize: 500         # Small cache for development
+    cacheTTL: 120000       # 2 minutes cache TTL
+    
+  agent:
+    maxConcurrency: 2     # Lower concurrency for development
+    memoryLimit: 256      # MB - smaller limit for development
+    priority: 8           # High priority for parsing
+    batchSize: 5          # Smaller batch size for development
+    cacheSize: 52428800   # 50MB cache (in bytes)
+    workerPoolSize: 1     # Single worker for easier debugging
+
+# Indexer Configuration (Development)
+indexer:
+  maxConcurrency: 1       # Single database operation for development
+  memoryLimit: 256        # MB - smaller limit for development
+  priority: 7
+  batchSize: 500
+  cacheSize: 25165824     # 25MB cache (in bytes)
+  cacheTTL: 180000        # 3 minutes (in ms)
+
+# Dev Agent Configuration (Development)
+devAgent:
+  maxConcurrency: 3
+  memoryLimit: 256
+  priority: 7
+
+# Dora Agent Configuration (Development)
+doraAgent:
+  maxConcurrency: 2
+  memoryLimit: 128
+  priority: 6
+
+# Query Agent Configuration (Development)
+queryAgent:
+  maxConcurrency: 10
+  memoryLimit: 112
+  priority: 9
+  simpleQueryTimeout: 100
+  complexQueryTimeout: 1000
+  cacheWarmupSize: 100
+
+# Semantic Agent Configuration (Development)
+semanticAgent:
+  maxConcurrency: 4
+  memoryLimit: 240
+  priority: 8
+  batchSize: 8
+  modelPath: "./models"
+
+# Coordinator Agent Configuration (Development)
+coordinator:
+  maxConcurrency: 80
+  memoryLimit: 128
+  priority: 10
+  taskQueueLimit: 80
+  loadBalancingStrategy: "least-loaded"
+  resourceConstraints:
+    maxMemoryMB: 1024
+    maxCpuPercent: 80
+    maxConcurrentAgents: 10
+    maxTaskQueueSize: 80
+
+# Conductor Orchestrator Configuration (Development)
+conductor:
+  maxConcurrency: 80
+  memoryLimit: 128
+  priority: 10
+  taskQueueLimit: 80
+  loadBalancingStrategy: "least-loaded"
+  resourceConstraints:
+    maxMemoryMB: 1024
+    maxCpuPercent: 80
+    maxConcurrentAgents: 10
+    maxTaskQueueSize: 80
+  complexityThreshold: 8
+  mandatoryDelegation: true
+
+# Performance Configuration (Development)
+performance:
+  monitoring:
+    enabled: true
+    collectMetrics: true
+    metricsInterval: 10000  # 10 seconds for quick feedback
+    
+  optimization:
+    enableVectorSearch: false  # Disable for faster startup
+    enableParallelParsing: false  # Disable for easier debugging
+    maxWorkerThreads: 2     # Minimal threads for development
+    
+# Development Features
+development:
+  enableHotReload: true     # Enable hot reload for development
+  verboseLogging: true      # Extra verbose logging
+  enableDebugEndpoints: true # Enable debug API endpoints
+  mockExternalServices: true # Mock external services
+  
+# Development Testing
+testing:
+  enableTestMode: false     # Enable test mode features
+  useInMemoryDatabase: false # Use in-memory database for tests
+  skipSlowOperations: false  # Skip slow operations in tests
+  
+# Development Debugging
+debugging:
+  enableSourceMaps: true    # Enable source maps for debugging
+  enableInspector: false    # Enable Node.js inspector
+  preserveStackTraces: true # Preserve stack traces for debugging
