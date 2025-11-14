@@ -20,7 +20,7 @@ import type { SQLiteManager } from "./sqlite-manager.js";
 // 2. CONSTANTS AND CONFIGURATION
 // =============================================================================
 const MIGRATIONS_TABLE = "migrations";
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 // =============================================================================
 // 3. DATA MODELS AND TYPE DEFINITIONS
@@ -394,6 +394,58 @@ export const migrations: Migration[] = [
       -- Drop repository tables
       DROP TABLE IF EXISTS project_repositories;
       DROP TABLE IF EXISTS projects;
+    `,
+  },
+  {
+    version: 4,
+    description: "Phase 3: Voyage AI integration with 1024-d embeddings",
+    up: `
+      -- Add dimension and provider tracking to embeddings table
+      -- This allows us to store embeddings from different models with different dimensions
+      ALTER TABLE embeddings ADD COLUMN dimension INTEGER DEFAULT 384;
+      ALTER TABLE embeddings ADD COLUMN provider TEXT DEFAULT 'transformers';
+
+      -- Create indexes for embedding queries by dimension and provider
+      CREATE INDEX IF NOT EXISTS idx_embeddings_dimension ON embeddings(dimension);
+      CREATE INDEX IF NOT EXISTS idx_embeddings_provider ON embeddings(provider);
+      CREATE INDEX IF NOT EXISTS idx_embeddings_model_dim ON embeddings(model_name, dimension);
+
+      -- Update existing embeddings with default values
+      UPDATE embeddings SET
+        dimension = 384,
+        provider = 'transformers'
+      WHERE dimension IS NULL OR provider IS NULL;
+
+      -- Create a view for embedding statistics by model and dimension
+      CREATE VIEW IF NOT EXISTS embedding_stats AS
+      SELECT
+        provider,
+        model_name,
+        dimension,
+        COUNT(*) as embedding_count,
+        MIN(created_at) as first_created,
+        MAX(created_at) as last_created
+      FROM embeddings
+      GROUP BY provider, model_name, dimension;
+
+      -- Performance index for common embedding queries
+      CREATE INDEX IF NOT EXISTS idx_embeddings_provider_model ON embeddings(provider, model_name);
+      CREATE INDEX IF NOT EXISTS idx_embeddings_entity_provider ON embeddings(entity_id, provider);
+    `,
+    down: `
+      -- Drop embedding statistics view
+      DROP VIEW IF EXISTS embedding_stats;
+
+      -- Drop indexes
+      DROP INDEX IF EXISTS idx_embeddings_dimension;
+      DROP INDEX IF EXISTS idx_embeddings_provider;
+      DROP INDEX IF EXISTS idx_embeddings_model_dim;
+      DROP INDEX IF EXISTS idx_embeddings_provider_model;
+      DROP INDEX IF EXISTS idx_embeddings_entity_provider;
+
+      -- Note: SQLite doesn't support DROP COLUMN directly
+      -- For production down migration, you'd need to recreate the table
+      -- For now, we just drop the indexes
     `,
   },
 ];

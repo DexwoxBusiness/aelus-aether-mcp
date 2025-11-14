@@ -20,7 +20,7 @@ import { parse as parseYaml } from "yaml";
 export interface MCPConfig {
   embedding?: {
     model?: string;
-    provider?: "memory" | "transformers" | "ollama" | "openai" | "cloudru";
+    provider?: "memory" | "transformers" | "ollama" | "openai" | "cloudru" | "voyage";
     apiKey?: string;
     enabled?: boolean;
     fallbackToMemory?: boolean;
@@ -51,6 +51,14 @@ export interface MCPConfig {
       timeout?: number;
       timeoutMs?: number;
       concurrency?: number;
+      maxBatchSize?: number;
+    };
+    voyage?: {
+      baseUrl?: string;
+      apiKey?: string;
+      timeoutMs?: number;
+      concurrency?: number;
+      inputType?: "query" | "document";
       maxBatchSize?: number;
     };
     transformers?: { quantized?: boolean; localPath?: string };
@@ -101,6 +109,14 @@ export interface EmbeddingConfigResolved {
     timeout?: number;
     timeoutMs?: number;
     concurrency?: number;
+    maxBatchSize?: number;
+  };
+  voyage?: {
+    baseUrl?: string;
+    apiKey?: string;
+    timeoutMs?: number;
+    concurrency?: number;
+    inputType?: "query" | "document";
     maxBatchSize?: number;
   };
   transformers?: { quantized?: boolean; localPath?: string };
@@ -446,6 +462,7 @@ export class ConfigLoader {
       ollama: embeddingConfig.ollama || undefined,
       openai: embeddingConfig.openai || undefined,
       cloudru: embeddingConfig.cloudru || undefined,
+      voyage: embeddingConfig.voyage || undefined,
       transformers: embeddingConfig.transformers || undefined,
       memory: embeddingConfig.memory || undefined,
     };
@@ -521,7 +538,13 @@ export class ConfigLoader {
             yamlConfig.mcp?.embedding?.model || process.env.MCP_EMBEDDING_MODEL || DEFAULT_CONFIG.mcp.embedding?.model,
           provider: (yamlConfig.mcp?.embedding?.provider ||
             process.env.MCP_EMBEDDING_PROVIDER ||
-            DEFAULT_CONFIG.mcp.embedding?.provider) as "memory" | "transformers" | "ollama" | "openai" | "cloudru",
+            DEFAULT_CONFIG.mcp.embedding?.provider) as
+            | "memory"
+            | "transformers"
+            | "ollama"
+            | "openai"
+            | "cloudru"
+            | "voyage",
           apiKey:
             yamlConfig.mcp?.embedding?.apiKey ||
             process.env.MCP_EMBEDDING_API_KEY ||
@@ -560,6 +583,14 @@ export class ConfigLoader {
             timeoutMs: Number(process.env.CLOUDRU_TIMEOUT_MS) || undefined,
             concurrency: Number(process.env.CLOUDRU_CONCURRENCY) || undefined,
             maxBatchSize: Number(process.env.CLOUDRU_MAX_BATCH_SIZE) || undefined,
+          },
+          voyage: yamlConfig.mcp?.embedding?.voyage || {
+            baseUrl: process.env.VOYAGE_BASE_URL || undefined,
+            apiKey: process.env.VOYAGE_API_KEY || undefined,
+            timeoutMs: Number(process.env.VOYAGE_TIMEOUT_MS) || undefined,
+            concurrency: Number(process.env.VOYAGE_CONCURRENCY) || undefined,
+            inputType: (process.env.VOYAGE_INPUT_TYPE as "query" | "document") || undefined,
+            maxBatchSize: Number(process.env.VOYAGE_MAX_BATCH_SIZE) || undefined,
           },
           transformers: {
             quantized:

@@ -156,7 +156,7 @@ export interface VectorStoreConfig {
 /**
  * Embedding generator configuration
  */
-export type EmbeddingProviderKind = "memory" | "transformers" | "ollama" | "openai" | "cloudru";
+export type EmbeddingProviderKind = "memory" | "transformers" | "ollama" | "openai" | "cloudru" | "voyage";
 
 export interface EmbeddingConfig {
   modelName: string;
