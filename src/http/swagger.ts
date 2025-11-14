@@ -43,12 +43,16 @@ const swaggerDefinition = {
   ],
   tags: [
     {
+      name: "Projects",
+      description: "Multi-repository project management (Phase 2)",
+    },
+    {
       name: "Indexing",
       description: "Codebase indexing operations",
     },
     {
       name: "Semantic",
-      description: "Semantic search and similarity operations",
+      description: "Semantic search with Voyage AI embeddings (Phase 3) and re-ranker (Phase 4)",
     },
     {
       name: "Analysis",
