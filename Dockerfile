@@ -79,8 +79,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
+    MCP_TRANSPORT=sse \
     MCP_DB_PATH=/app/data/graph.db \
     MCP_SERVER_DIR=/app/repos
 
-# Start HTTP server
-CMD ["node", "dist/http/server.js"]
+# Start MCP server with SSE transport (for n8n)
+CMD ["node", "dist/index.js"]

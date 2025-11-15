@@ -58,6 +58,8 @@
     "smoke:semantic": "node scripts/smoke-semantic.js /home/er77/_work_fodler/baserow-develop",
     "http": "node dist/http/server.js",
     "http:dev": "tsup --watch & node --watch dist/http/server.js",
+    "mcp:sse": "MCP_TRANSPORT=sse node dist/index.js",
+    "mcp:stdio": "node dist/index.js",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
     "prepare": "simple-git-hooks"
