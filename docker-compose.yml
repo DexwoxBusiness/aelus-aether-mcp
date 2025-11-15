@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # Aelus Aether MCP HTTP Server
+  aelus-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aelus-mcp-server
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"  # HTTP API port
+
+    environment:
+      # Server Configuration
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+
+      # CORS Configuration (allow n8n to access)
+      CORS_ORIGINS: "*"  # Change to specific n8n URL in production
+
+      # Database Configuration
+      MCP_DB_PATH: /app/data/graph.db
+      MCP_SERVER_DIR: /app/repos
+
+      # Semantic Search (Voyage AI) - Phase 3
+      MCP_EMBEDDING_ENABLED: ${MCP_EMBEDDING_ENABLED:-true}
+      MCP_EMBEDDING_PROVIDER: ${MCP_EMBEDDING_PROVIDER:-voyage}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      VOYAGE_BASE_URL: ${VOYAGE_BASE_URL:-https://api.voyageai.com}
+      VOYAGE_CONCURRENCY: ${VOYAGE_CONCURRENCY:-4}
+      VOYAGE_MAX_BATCH_SIZE: ${VOYAGE_MAX_BATCH_SIZE:-128}
+      VOYAGE_INPUT_TYPE: ${VOYAGE_INPUT_TYPE:-document}
+
+      # Re-ranker Configuration - Phase 4
+      MCP_RERANKER_ENABLED: ${MCP_RERANKER_ENABLED:-true}
+      MCP_RERANKER_MODEL: ${MCP_RERANKER_MODEL:-rerank-2}
+      MCP_RERANKER_DEFAULT_TOP_K: ${MCP_RERANKER_DEFAULT_TOP_K:-20}
+      MCP_SEMANTIC_USE_RERANKER: ${MCP_SEMANTIC_USE_RERANKER:-true}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    volumes:
+      # Persistent database storage
+      - aelus-mcp-data:/app/data
+
+      # Mount your repositories to analyze
+      # IMPORTANT: Update this path to your actual code repositories
+      - ${REPOS_PATH:-./repos}:/app/repos:ro
+
+      # Optional: Custom configuration
+      - ${CONFIG_PATH:-./config.yaml}:/app/config.yaml:ro
+
+    networks:
+      - n8n-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (adjust based on your server capacity)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Optional: n8n service (if not already running)
+  # Uncomment if you want to deploy n8n alongside MCP
+  # n8n:
+  #   image: n8nio/n8n:latest
+  #   container_name: n8n
+  #   restart: unless-stopped
+  #
+  #   ports:
+  #     - "5678:5678"
+  #
+  #   environment:
+  #     - N8N_HOST=${N8N_HOST:-localhost}
+  #     - N8N_PORT=5678
+  #     - N8N_PROTOCOL=http
+  #     - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+  #     - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
+  #
+  #   volumes:
+  #     - n8n-data:/home/node/.n8n
+  #
+  #   networks:
+  #     - n8n-network
+
+networks:
+  n8n-network:
+    # If n8n is already running, use external network
+    # Uncomment and specify your n8n network name
+    # external: true
+    # name: your_n8n_network_name
+    driver: bridge
+
+volumes:
+  aelus-mcp-data:
+    driver: local
+  # n8n-data:
+  #   driver: local

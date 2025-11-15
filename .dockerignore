@@ -1,0 +1,82 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts (will be built in container)
+dist/
+build/
+out/
+
+# Development files
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+tests/
+__tests__/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+coverage/
+.nyc_output/
+
+# Documentation (except production docs)
+docs/
+examples/
+*.md
+!README.md
+!API_REFERENCE.md
+!DEVELOPER_QUICKSTART.md
+!N8N_INTEGRATION_GUIDE.md
+!HTTP_API_README.md
+
+# Environment files
+.env*
+!.env.http.example
+
+# Database files (should be in volumes)
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+*.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+.circleci/
+.github/
+
+# Repository directories (will be mounted as volumes)
+repos/
+
+# Lint and format configs (not needed in production)
+.eslintrc*
+.prettierrc*
+biome.json
+
+# TypeScript configs (not needed after build)
+tsconfig*.json
+tsup.config.ts
