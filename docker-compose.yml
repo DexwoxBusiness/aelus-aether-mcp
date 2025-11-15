@@ -18,6 +18,9 @@ services:
       PORT: 3000
       HOST: 0.0.0.0
 
+      # MCP Transport (sse for n8n, stdio for Claude Desktop)
+      MCP_TRANSPORT: sse
+
       # CORS Configuration (allow n8n to access)
       CORS_ORIGINS: "*"  # Change to specific n8n URL in production
 

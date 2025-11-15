@@ -38,6 +38,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:pa
 import { fileURLToPath } from "node:url";
 // Consolidated MCP SDK imports
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 // Schema and Node.js built-ins
@@ -1959,24 +1960,14 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
       case "analyze_hotspots": {
         const startTime = Date.now();
         const { metric, limit } = AnalyzeHotspotsSchema.parse(args);
-        
-        logger.info(
-          "ANALYZE_HOTSPOTS",
-          "Starting hotspot analysis",
-          { metric, limit: limit ?? 10 },
-          requestId,
-        );
-        
+
+        logger.info("ANALYZE_HOTSPOTS", "Starting hotspot analysis", { metric, limit: limit ?? 10 }, requestId);
+
         const storage = await getGraphStorage(globalSQLiteManager);
         const timeoutMs = config.mcp.agents?.defaultTimeout || config.mcp.server?.timeout || 30000;
-        
-        logger.debug(
-          "ANALYZE_HOTSPOTS",
-          "Fetching relationships",
-          { timeoutMs },
-          requestId,
-        );
-        
+
+        logger.debug("ANALYZE_HOTSPOTS", "Fetching relationships", { timeoutMs }, requestId);
+
         // Fetch relationships only to avoid loading entities unnecessarily
         const rels = await withTimeout(
           storage.findRelationships({ type: "relationship", limit: 10000 }),
@@ -1984,13 +1975,8 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
           "analyze_hotspots",
           requestId,
         );
-        
-        logger.debug(
-          "ANALYZE_HOTSPOTS",
-          "Relationships fetched",
-          { count: rels.length },
-          requestId,
-        );
+
+        logger.debug("ANALYZE_HOTSPOTS", "Relationships fetched", { count: rels.length }, requestId);
 
         const counts = new Map<string, { incoming: number; outgoing: number }>();
         for (const rel of rels) {
@@ -2002,25 +1988,15 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
           to.incoming += 1;
           counts.set(rel.toId, to);
         }
-        
-        logger.debug(
-          "ANALYZE_HOTSPOTS",
-          "Counts computed",
-          { uniqueEntities: counts.size },
-          requestId,
-        );
+
+        logger.debug("ANALYZE_HOTSPOTS", "Counts computed", { uniqueEntities: counts.size }, requestId);
 
         const ranked = Array.from(counts.entries())
           .map(([id, data]) => ({ id, ...data, total: data.incoming + data.outgoing }))
           .sort((a, b) => b.total - a.total)
           .slice(0, limit ?? 10);
-          
-        logger.debug(
-          "ANALYZE_HOTSPOTS",
-          "Ranked entities",
-          { topCount: ranked.length },
-          requestId,
-        );
+
+        logger.debug("ANALYZE_HOTSPOTS", "Ranked entities", { topCount: ranked.length }, requestId);
 
         const hotspots = [] as Array<{
           entity: ReturnType<typeof mapEntitySummary>;
@@ -2031,12 +2007,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
         for (const entry of ranked) {
           const entity = await storage.getEntity(entry.id);
           if (!entity) {
-            logger.debug(
-              "ANALYZE_HOTSPOTS",
-              "Entity not found in storage",
-              { entityId: entry.id },
-              requestId,
-            );
+            logger.debug("ANALYZE_HOTSPOTS", "Entity not found in storage", { entityId: entry.id }, requestId);
             continue;
           }
           const baseScore = entry.total * 10 + entry.incoming * 5;
@@ -2050,12 +2021,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
         }
 
         const elapsed = Date.now() - startTime;
-        logger.info(
-          "ANALYZE_HOTSPOTS",
-          "Hotspot analysis complete",
-          { hotspots: hotspots.length, elapsed },
-          requestId,
-        );
+        logger.info("ANALYZE_HOTSPOTS", "Hotspot analysis complete", { hotspots: hotspots.length, elapsed }, requestId);
 
         return {
           content: [
@@ -2574,7 +2540,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   logger.mcpRequest(name, args, requestId);
 
   const result = await executeToolCall(name, args, requestId, startTime);
-  
+
   // Log response details for debugging Windsurf hang issues
   const responseText = result.content?.[0]?.text || "";
   logger.info(
@@ -2587,12 +2553,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     },
     requestId,
   );
-  
+
   // Force stdout flush to ensure response reaches Windsurf
   if (process.stdout.write("")) {
     // Flush successful
   }
-  
+
   return result;
 });
 
@@ -2677,27 +2643,166 @@ async function main() {
   console.log("Multi-agent LiteRAG architecture initialized");
   console.log(`Resource constraints: 1GB memory, 80% CPU, 10 concurrent agents`);
 
-  // Connect transport FIRST for fast readiness
-  logger.systemEvent("MCP Server Transport Connecting", { transport: "stdio" });
-  const transport = new StdioServerTransport();
-  
-  // Add error handling for transport
-  transport.onerror = (error) => {
-    logger.error("MCP_TRANSPORT", "Transport error", { error: error.message }, undefined, error);
-  };
-  
-  transport.onclose = () => {
-    logger.systemEvent("MCP Server Transport Closed", { transport: "stdio" });
-  };
-  
-  await server.connect(transport);
-  console.log("MCP server running on stdio transport");
-  logger.systemEvent("MCP Server Ready", {
-    directory,
-    transport: "stdio",
-    toolsCount: 13,
-    readyTime: Date.now(),
-  });
+  // Choose transport based on environment variable
+  const useSSE = process.env.MCP_TRANSPORT === "sse" || process.env.MCP_USE_SSE === "true";
+  const transportType = useSSE ? "sse" : "stdio";
+
+  logger.systemEvent("MCP Server Transport Connecting", { transport: transportType });
+
+  if (useSSE) {
+    // HTTP+SSE transport for n8n integration
+    const express = await import("express");
+    const cors = await import("cors");
+    const { randomUUID } = await import("node:crypto");
+
+    const app = express.default();
+    const PORT = parseInt(process.env.PORT || "3000", 10);
+    const HOST = process.env.HOST || "0.0.0.0";
+
+    app.use(express.default.json());
+    app.use(
+      cors.default({
+        origin: process.env.CORS_ORIGINS?.split(",") || "*",
+        exposedHeaders: ["Mcp-Session-Id"],
+      }),
+    );
+
+    // Store active transports
+    const transports = new Map<string, SSEServerTransport>();
+
+    // SSE endpoint - establishes event stream
+    app.get("/sse", async (_req, res) => {
+      const sessionId = randomUUID();
+      logger.info("SSE_CONNECTION", "New SSE connection", { sessionId }, sessionId);
+
+      try {
+        const transport = new SSEServerTransport("/messages", res as any);
+        transports.set(sessionId, transport);
+
+        await server.connect(transport);
+        await transport.start();
+
+        transport.onclose = () => {
+          logger.info("SSE_CLOSED", "Connection closed", { sessionId }, sessionId);
+          transports.delete(sessionId);
+        };
+
+        transport.onerror = (error) => {
+          logger.error("SSE_ERROR", "Transport error", { sessionId }, sessionId, error);
+          transports.delete(sessionId);
+        };
+      } catch (error) {
+        logger.error("SSE_START_ERROR", "Failed to start SSE", { sessionId }, sessionId, error as Error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to establish SSE connection" });
+        }
+      }
+    });
+
+    // Messages endpoint - receives client messages
+    app.post("/messages", async (req, res): Promise<void> => {
+      const sessionId = (req.body?.meta?.sessionId || req.headers["mcp-session-id"]) as string;
+      const requestId = randomUUID();
+
+      if (!sessionId) {
+        res.status(400).json({ error: "Missing session ID" });
+        return;
+      }
+
+      const transport = transports.get(sessionId);
+      if (!transport) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+      }
+
+      try {
+        await transport.handlePostMessage(req as any, res as any, req.body);
+      } catch (error) {
+        logger.error("MESSAGE_ERROR", "Failed to handle message", { sessionId }, requestId, error as Error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to process message" });
+        }
+      }
+    });
+
+    // Health check
+    app.get("/health", (_req, res) => {
+      res.json({
+        status: "healthy",
+        transport: "sse",
+        activeSessions: transports.size,
+        directory,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // Root info
+    app.get("/", (_req, res) => {
+      res.json({
+        name: "Code Graph RAG MCP Server",
+        version: versionInfo.version,
+        transport: "HTTP+SSE",
+        protocol: "Model Context Protocol",
+        endpoints: {
+          sse: `http://${HOST}:${PORT}/sse`,
+          messages: `http://${HOST}:${PORT}/messages`,
+          health: `http://${HOST}:${PORT}/health`,
+        },
+        usage: {
+          n8n: `Configure MCP node with: http://localhost:${PORT}/sse`,
+        },
+      });
+    });
+
+    // Start HTTP server
+    app.listen(PORT, HOST, () => {
+      console.log(`\n🚀 MCP SSE Server Ready`);
+      console.log(`   SSE Endpoint:      http://${HOST}:${PORT}/sse`);
+      console.log(`   Messages Endpoint: http://${HOST}:${PORT}/messages`);
+      console.log(`   Health Check:      http://${HOST}:${PORT}/health`);
+      console.log(`\n📡 n8n Configuration:`);
+      console.log(`   MCP Server URL: http://localhost:${PORT}/sse\n`);
+
+      logger.systemEvent("MCP SSE Server Ready", {
+        port: PORT,
+        host: HOST,
+        directory,
+        transport: "sse",
+        toolsCount: 24,
+        readyTime: Date.now(),
+      });
+    });
+
+    // Graceful shutdown
+    process.on("SIGTERM", () => {
+      logger.systemEvent("MCP Server Shutting Down", { transport: "sse", activeSessions: transports.size });
+      for (const [sessionId, transport] of transports.entries()) {
+        logger.info("SHUTDOWN", "Closing transport", { sessionId }, sessionId);
+        transport.close();
+      }
+      process.exit(0);
+    });
+  } else {
+    // stdio transport (default)
+    const transport = new StdioServerTransport();
+
+    transport.onerror = (error) => {
+      logger.error("MCP_TRANSPORT", "Transport error", { error: error.message }, undefined, error);
+    };
+
+    transport.onclose = () => {
+      logger.systemEvent("MCP Server Transport Closed", { transport: "stdio" });
+    };
+
+    await server.connect(transport);
+    console.log("MCP server running on stdio transport");
+    logger.systemEvent("MCP Server Ready", {
+      directory,
+      transport: "stdio",
+      toolsCount: 24,
+      readyTime: Date.now(),
+    });
+  }
 
   if (debugRequests.length > 0) {
     try {
