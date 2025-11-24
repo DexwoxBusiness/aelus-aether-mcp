@@ -192,6 +192,14 @@ export interface EmbeddingConfig {
     concurrency?: number;
     maxBatchSize?: number;
   };
+  voyage?: {
+    baseUrl?: string;
+    apiKey?: string;
+    timeoutMs?: number;
+    concurrency?: number;
+    inputType?: "query" | "document";
+    maxBatchSize?: number;
+  };
   memory?: {
     dimension?: number;
   };

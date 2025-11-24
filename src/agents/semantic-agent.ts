@@ -228,6 +228,7 @@ export class SemanticAgent extends BaseAgent implements SemanticOperations {
           }
         : undefined,
       memory: config.mcp?.embedding?.memory,
+      voyage: config.mcp?.embedding?.voyage,
     });
 
     // Get dimensions dynamically from actual embedding

@@ -124,6 +124,7 @@ export class EmbeddingGenerator {
           openai: this.config.openai,
           cloudru: this.config.cloudru,
           memory: this.config.memory,
+          voyage: this.config.voyage,
         });
 
         this.fallback = new MemoryProvider();
