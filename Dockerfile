@@ -82,4 +82,4 @@ ENV NODE_ENV=production \
     MCP_SERVER_DIR=/app/repos
 
 # Start MCP server with SSE transport (for n8n)
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/index.js", "/app/repos"]
