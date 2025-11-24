@@ -77,6 +77,6 @@ repos/
 .prettierrc*
 biome.json
 
-# TypeScript configs (not needed after build)
-tsconfig*.json
-tsup.config.ts
+# TypeScript configs (needed for container build, safe to ship)
+# tsconfig*.json
+# tsup.config.ts

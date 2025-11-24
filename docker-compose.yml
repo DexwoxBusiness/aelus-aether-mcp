@@ -9,6 +9,13 @@ services:
     container_name: aelus-mcp-server
     restart: unless-stopped
 
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.aelus-mcp.rule=Host(`mcp.${DOMAIN_NAME}`)
+      - traefik.http.routers.aelus-mcp.entrypoints=web,websecure
+      - traefik.http.routers.aelus-mcp.tls=true
+      - traefik.http.routers.aelus-mcp.tls.certresolver=mytlschallenge
+
     ports:
       - "3000:3000"  # HTTP API port
 
