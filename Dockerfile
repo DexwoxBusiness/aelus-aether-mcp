@@ -20,7 +20,7 @@ COPY tsconfig.json ./
 COPY tsup.config.ts ./
 
 # Install ALL dependencies (including devDependencies for build)
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY src ./src
