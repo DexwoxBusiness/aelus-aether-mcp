@@ -38,6 +38,7 @@ services:
       # Semantic Search (Voyage AI) - Phase 3
       MCP_EMBEDDING_ENABLED: ${MCP_EMBEDDING_ENABLED:-true}
       MCP_EMBEDDING_PROVIDER: ${MCP_EMBEDDING_PROVIDER:-voyage}
+      MCP_EMBEDDING_MODEL: ${MCP_EMBEDDING_MODEL:-voyage-code-2}
       VOYAGE_API_KEY: pa-uxdYPuYFqZUDNTaj7fXU7Il8_oV4BPfKagOUDxvk_pM
       VOYAGE_BASE_URL: ${VOYAGE_BASE_URL:-https://api.voyageai.com}
       VOYAGE_CONCURRENCY: ${VOYAGE_CONCURRENCY:-4}
