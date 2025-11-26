@@ -61,8 +61,13 @@ export function errorHandler(err: ApiError, req: Request, res: Response, _next: 
   }
 
   const requestId = res.locals.requestId || (req.headers["x-request-id"] as string);
+  const isDev = process.env.NODE_ENV !== "production";
 
-  // Log error
+  // Always log to console for Docker logs visibility
+  console.error(`[HTTP_ERROR] ${req.method} ${req.path} - ${err.message}`);
+  console.error(`[HTTP_ERROR] Stack: ${err.stack}`);
+
+  // Log error with logger
   logger.error(
     "HTTP_ERROR",
     err.message,
@@ -71,6 +76,7 @@ export function errorHandler(err: ApiError, req: Request, res: Response, _next: 
       method: req.method,
       statusCode: err.statusCode,
       code: err.code,
+      stack: err.stack,
     },
     requestId,
     err,
@@ -115,10 +121,12 @@ export function errorHandler(err: ApiError, req: Request, res: Response, _next: 
 
   // Default to 500 for unknown errors
   const statusCode = err.statusCode || 500;
-  const defaultError: ApiError = Object.assign(new Error(statusCode === 500 ? "Internal server error" : err.message), {
+  // Show actual error message in non-production, hide in production
+  const errorMessage = isDev || statusCode !== 500 ? err.message : "Internal server error";
+  const defaultError: ApiError = Object.assign(new Error(errorMessage), {
     statusCode,
-    code: err.code,
-    details: err.details,
+    code: err.code || err.name,
+    details: isDev ? { stack: err.stack, originalMessage: err.message } : err.details,
   });
   return res.status(statusCode).json(formatErrorResponse(defaultError, requestId));
 }
