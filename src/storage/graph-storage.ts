@@ -318,6 +318,11 @@ export class GraphStorageImpl implements GraphStorage {
 
     // Apply filters
     if (query.filters) {
+      if (query.filters.product_id) {
+        sql += " AND project_id = ?";
+        params.push(query.filters.product_id);
+      }
+
       if (query.filters.entityType) {
         const types = Array.isArray(query.filters.entityType) ? query.filters.entityType : [query.filters.entityType];
         sql += ` AND type IN (${types.map(() => "?").join(",")})`;
@@ -428,13 +433,18 @@ export class GraphStorageImpl implements GraphStorage {
     this.statements.deleteRelationship?.run(id);
   }
 
-  async getRelationshipsForEntity(entityId: string, type?: RelationType): Promise<Relationship[]> {
+  async getRelationshipsForEntity(entityId: string, type?: RelationType, product_id?: string): Promise<Relationship[]> {
     this.ensureReady();
     let sql = `
-      SELECT * FROM relationships 
+      SELECT * FROM relationships
       WHERE (from_id = ? OR to_id = ?)
     `;
     const params: any[] = [entityId, entityId];
+
+    if (product_id) {
+      sql += " AND project_id = ?";
+      params.push(product_id);
+    }
 
     if (type) {
       sql += " AND type = ?";
@@ -452,6 +462,11 @@ export class GraphStorageImpl implements GraphStorage {
 
     // Apply filters
     if (query.filters) {
+      if (query.filters.product_id) {
+        sql += " AND project_id = ?";
+        params.push(query.filters.product_id);
+      }
+
       if (query.filters.relationshipType) {
         const types = Array.isArray(query.filters.relationshipType)
           ? query.filters.relationshipType
@@ -524,11 +539,20 @@ export class GraphStorageImpl implements GraphStorage {
         const entities = await this.findEntities(query);
         const relationships = await this.findRelationships(query);
 
-        // Get total counts
-        const totalEntities = this.db.prepare("SELECT COUNT(*) as count FROM entities").get() as { count: number };
-        const totalRelationships = this.db.prepare("SELECT COUNT(*) as count FROM relationships").get() as {
-          count: number;
-        };
+        // Get total counts (filtered by product_id if provided)
+        const product_id = query.filters?.product_id;
+        let entityCountSql = "SELECT COUNT(*) as count FROM entities";
+        let relCountSql = "SELECT COUNT(*) as count FROM relationships";
+        const countParams: any[] = [];
+
+        if (product_id) {
+          entityCountSql += " WHERE project_id = ?";
+          relCountSql += " WHERE project_id = ?";
+          countParams.push(product_id);
+        }
+
+        const totalEntities = this.db.prepare(entityCountSql).get(...countParams) as { count: number };
+        const totalRelationships = this.db.prepare(relCountSql).get(...countParams) as { count: number };
 
         return {
           entities,
@@ -544,7 +568,7 @@ export class GraphStorageImpl implements GraphStorage {
     );
   }
 
-  async getSubgraph(entityId: string, depth: number): Promise<GraphQueryResult> {
+  async getSubgraph(entityId: string, depth: number, product_id?: string): Promise<GraphQueryResult> {
     return this.measureOperation(
       "get_subgraph",
       async () => {
@@ -569,8 +593,8 @@ export class GraphStorageImpl implements GraphStorage {
           if (entity) {
             entities.set(id, entity);
 
-            // Get relationships
-            const rels = await this.getRelationshipsForEntity(id);
+            // Get relationships (filtered by product_id if provided)
+            const rels = await this.getRelationshipsForEntity(id, undefined, product_id);
             for (const rel of rels) {
               relationships.set(rel.id, rel);
 

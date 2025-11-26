@@ -146,6 +146,7 @@ export interface GraphQuery {
     relationshipType?: RelationType | RelationType[];
     filePath?: string | string[];
     name?: string | RegExp;
+    product_id?: string;
   };
   depth?: number;
   limit?: number;
@@ -291,7 +292,7 @@ export interface GraphStorage {
   insertRelationship(relationship: Relationship): Promise<void>;
   insertRelationships(relationships: Relationship[]): Promise<BatchResult>;
   deleteRelationship(id: string): Promise<void>;
-  getRelationshipsForEntity(entityId: string, type?: RelationType): Promise<Relationship[]>;
+  getRelationshipsForEntity(entityId: string, type?: RelationType, product_id?: string): Promise<Relationship[]>;
   findRelationships(query: GraphQuery): Promise<Relationship[]>;
 
   // File operations
@@ -301,7 +302,7 @@ export interface GraphStorage {
 
   // Query operations
   executeQuery(query: GraphQuery): Promise<GraphQueryResult>;
-  getSubgraph(entityId: string, depth: number): Promise<GraphQueryResult>;
+  getSubgraph(entityId: string, depth: number, product_id?: string): Promise<GraphQueryResult>;
 
   // Maintenance operations
   vacuum(): Promise<void>;
