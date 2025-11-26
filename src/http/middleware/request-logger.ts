@@ -36,7 +36,6 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
   // Log response when finished
   res.on("finish", () => {
     const duration = Date.now() - startTime;
-    res.setHeader("X-Response-Time", `${duration}ms`);
 
     logger.info(
       "HTTP_RESPONSE",
