@@ -51,6 +51,7 @@ import { ConfigLoader, initializeConfig, validateConfig } from "./config/yaml-co
 import { knowledgeBus } from "./core/knowledge-bus.js";
 import { ProjectManager } from "./core/project-manager.js";
 import { resourceManager } from "./core/resource-manager.js";
+import { initializeToolExecutor } from "./core/tool-executor.js";
 import { errorHandler, notFoundHandler } from "./http/middleware/error.js";
 import { requestLogger } from "./http/middleware/request-logger.js";
 import agentsRoutes from "./http/routes/agents.js";
@@ -2776,6 +2777,9 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
     };
   }
 }
+
+// Initialize the tool executor for HTTP API routes
+initializeToolExecutor(executeToolCall);
 
 // Handler for tool execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {

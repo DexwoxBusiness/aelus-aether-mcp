@@ -2,34 +2,11 @@
  * Tool Executor Service
  * Centralized tool execution logic that can be used by both MCP and HTTP servers
  *
- * This module will be populated with the actual executeToolCall logic
- * from src/index.ts after refactoring
+ * This module provides a global executor that delegates to the actual
+ * executeToolCall implementation in src/index.ts
  */
 
-import type { ConductorOrchestrator } from "../agents/conductor-orchestrator.js";
-import type { AppConfig } from "../config/yaml-config.js";
-import type { SQLiteManager } from "../storage/sqlite-manager.js";
-
-/**
- * Tool executor context
- * Contains all dependencies needed for tool execution
- */
-export interface ToolExecutorContext {
-  conductor: ConductorOrchestrator | null;
-  sqliteManager: SQLiteManager;
-  config: AppConfig;
-  directory: string;
-
-  // Agent getters
-  getSemanticAgent: () => Promise<any>;
-  getDevAgent: () => Promise<any>;
-  getDoraAgent: () => Promise<any>;
-  getConductor: () => ConductorOrchestrator;
-
-  // Helper functions
-  normalizeInputPath: (rawPath?: string | null) => string | undefined;
-  ensureSemanticsReady: (minVectors?: number, timeoutMs?: number) => Promise<boolean>;
-}
+import { logger } from "../utils/logger.js";
 
 /**
  * Tool execution result
@@ -42,34 +19,59 @@ export interface ToolExecutionResult {
 }
 
 /**
- * Tool Executor Service
- * Handles execution of all MCP tools
+ * Type for the execute function
  */
-export class ToolExecutor {
-  constructor(private context: ToolExecutorContext) {}
+export type ExecuteToolFunction = (
+  name: string,
+  args: unknown,
+  requestId: string,
+  startTime: number,
+) => Promise<ToolExecutionResult>;
 
-  /**
-   * Execute a tool by name
-   *
-   * This is the main entry point that will contain the logic from
-   * the executeToolCall function in src/index.ts
-   */
-  async execute(toolName: string, _args: unknown, requestId: string): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
+/**
+ * Global execute function (set by index.ts after initialization)
+ */
+let globalExecuteFunction: ExecuteToolFunction | null = null;
 
-    // TODO: Port the executeToolCall logic from src/index.ts
-    // For now, return a placeholder
-    // The context will be used when implementing the actual tool execution
-    void this.context;
+/**
+ * Initialize the global tool executor with the actual execute function
+ */
+export function initializeToolExecutor(executeFn: ExecuteToolFunction): void {
+  globalExecuteFunction = executeFn;
+  logger.info("TOOL_EXECUTOR", "Tool executor initialized", {});
+}
 
-    throw new Error(
-      `Tool executor not yet implemented. Tool: ${toolName}, RequestId: ${requestId}, StartTime: ${startTime}`,
-    );
+/**
+ * Check if tool executor is initialized
+ */
+export function isToolExecutorInitialized(): boolean {
+  return globalExecuteFunction !== null;
+}
+
+/**
+ * Execute a tool by name
+ */
+export async function executeToolDirect(
+  toolName: string,
+  args: unknown,
+  requestId: string,
+): Promise<ToolExecutionResult> {
+  if (!globalExecuteFunction) {
+    throw new Error("Tool executor not initialized. Call initializeToolExecutor() first.");
   }
 
-  /**
-   * Get available tools
-   */
+  const startTime = Date.now();
+  return globalExecuteFunction(toolName, args, requestId, startTime);
+}
+
+/**
+ * Tool Executor class (for backward compatibility)
+ */
+export class ToolExecutor {
+  async execute(toolName: string, args: unknown, requestId: string): Promise<ToolExecutionResult> {
+    return executeToolDirect(toolName, args, requestId);
+  }
+
   getAvailableTools(): string[] {
     return [
       "index",
@@ -96,29 +98,24 @@ export class ToolExecutor {
       "get_agent_metrics",
       "get_bus_stats",
       "clear_bus_topic",
+      "create_product",
+      "list_products",
+      "add_repository_to_product",
     ];
   }
 }
 
 /**
- * Global tool executor instance (will be initialized by the main server)
+ * Global tool executor instance
  */
 let globalToolExecutor: ToolExecutor | null = null;
-
-/**
- * Initialize global tool executor
- */
-export function initializeToolExecutor(context: ToolExecutorContext): ToolExecutor {
-  globalToolExecutor = new ToolExecutor(context);
-  return globalToolExecutor;
-}
 
 /**
  * Get global tool executor instance
  */
 export function getToolExecutor(): ToolExecutor {
   if (!globalToolExecutor) {
-    throw new Error("Tool executor not initialized. Call initializeToolExecutor() first.");
+    globalToolExecutor = new ToolExecutor();
   }
   return globalToolExecutor;
 }
