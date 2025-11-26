@@ -82,8 +82,8 @@ export class BatchOperations {
 
     const insertStmt = this.db.prepare(`
       INSERT INTO entities
-      (id, name, type, file_path, location, metadata, hash, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, name, type, file_path, location, metadata, hash, created_at, updated_at, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         type = excluded.type,
@@ -91,7 +91,8 @@ export class BatchOperations {
         location = excluded.location,
         metadata = excluded.metadata,
         hash = COALESCE(excluded.hash, entities.hash),
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        project_id = COALESCE(excluded.project_id, entities.project_id)
     `);
 
     const seen = new Set<string>();
@@ -129,6 +130,7 @@ export class BatchOperations {
                 entity.hash,
                 entity.createdAt || now,
                 entity.updatedAt || now,
+                entity.project_id || null,
               );
             }
           });
@@ -183,10 +185,11 @@ export class BatchOperations {
 
     const insertStmt = this.db.prepare(`
       INSERT INTO relationships
-      (id, from_id, to_id, type, metadata)
-      VALUES (?, ?, ?, ?, ?)
+      (id, from_id, to_id, type, metadata, project_id)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        metadata = COALESCE(excluded.metadata, relationships.metadata)
+        metadata = COALESCE(excluded.metadata, relationships.metadata),
+        project_id = COALESCE(excluded.project_id, relationships.project_id)
     `);
 
     const seen = new Set<string>();
@@ -211,7 +214,14 @@ export class BatchOperations {
           const transaction = this.db.transaction((batch: Relationship[]) => {
             for (const rel of batch) {
               const id = this.stableRelationshipId({ fromId: rel.fromId, toId: rel.toId, type: rel.type });
-              insertStmt.run(id, rel.fromId, rel.toId, rel.type, rel.metadata ? JSON.stringify(rel.metadata) : null);
+              insertStmt.run(
+                id,
+                rel.fromId,
+                rel.toId,
+                rel.type,
+                rel.metadata ? JSON.stringify(rel.metadata) : null,
+                rel.project_id || null,
+              );
             }
           });
 

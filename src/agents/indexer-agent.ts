@@ -87,6 +87,7 @@ export interface IndexerTask extends AgentTask {
     entityId?: string;
     depth?: number;
     relationships?: EntityRelationship[];
+    product_id?: string;
   };
 }
 
@@ -241,6 +242,7 @@ export class IndexerAgent extends BaseAgent {
           indexerTask.payload.entities!,
           indexerTask.payload.filePath!,
           indexerTask.payload.relationships,
+          indexerTask.payload.product_id,
         );
 
       case "index:incremental":
@@ -264,6 +266,7 @@ export class IndexerAgent extends BaseAgent {
     entities: ParsedEntity[],
     filePath: string,
     providedRelationships?: ProvidedRelationship[],
+    product_id?: string,
   ): Promise<BatchResult & { entitiesIndexed: number; relationshipsCreated: number }> {
     const startTime = Date.now();
     console.log(`[${this.id}] Indexing ${entities.length} entities from ${filePath}`);
@@ -298,6 +301,7 @@ export class IndexerAgent extends BaseAgent {
           id: stableEntityId(base),
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          project_id: product_id,
         };
 
         storageEntities.push(entity);
@@ -359,6 +363,7 @@ export class IndexerAgent extends BaseAgent {
             type: rel.type as any,
             metadata: { line: rel.metadata?.line, context: rel.type },
             createdAt: Date.now(),
+            project_id: product_id,
           } as Relationship);
         }
       }
@@ -399,6 +404,7 @@ export class IndexerAgent extends BaseAgent {
             id: placeholderId,
             createdAt: Date.now(),
             updatedAt: Date.now(),
+            project_id: product_id,
           });
         }
 
@@ -485,6 +491,9 @@ export class IndexerAgent extends BaseAgent {
     const relationships: Relationship[] = [];
     const entityMap = new Map<string, string>(); // name -> id mapping
 
+    // Extract product_id from first entity (all entities in a file should have the same product_id)
+    const product_id = storageEntities.length > 0 ? storageEntities[0]?.project_id : undefined;
+
     // Build entity map
     for (const entity of storageEntities) {
       entityMap.set(`${entity.name}:${entity.location.start.line}`, entity.id);
@@ -509,6 +518,7 @@ export class IndexerAgent extends BaseAgent {
               column: parsed.location.start.column,
               context: `Import from ${parsed.importData.source}`,
             },
+            project_id: product_id,
           });
         }
       }
@@ -528,6 +538,7 @@ export class IndexerAgent extends BaseAgent {
                 line: parsed.location.start.line,
                 column: parsed.location.start.column,
               },
+              project_id: product_id,
             });
           }
         }
@@ -548,6 +559,7 @@ export class IndexerAgent extends BaseAgent {
                 line: child.location.start.line,
                 column: child.location.start.column,
               },
+              project_id: product_id,
             });
           }
         }

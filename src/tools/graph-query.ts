@@ -15,6 +15,7 @@ export async function queryGraphEntities(
   storage: GraphStorageImpl,
   query?: string,
   limit: number = 100,
+  product_id?: string,
 ): Promise<{
   entities: Entity[];
   relationships: Relationship[];
@@ -23,14 +24,15 @@ export async function queryGraphEntities(
     totalRelationships: number;
   };
 }> {
-  // Use the storage’s executeQuery to avoid raw SQL
+  // Use the storage's executeQuery to avoid raw SQL
   const q = await storage.executeQuery({
     type: "entity",
     limit,
-    filters: query
+    filters: query || product_id
       ? {
           // Pass LIKE-compatible pattern via RegExp source consumed by storage
-          name: new RegExp(likePattern(query)),
+          ...(query ? { name: new RegExp(likePattern(query)) } : {}),
+          ...(product_id ? { product_id } : {}),
         }
       : undefined,
   });
