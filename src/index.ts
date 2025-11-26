@@ -2260,7 +2260,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
       }
 
       case "analyze_code_impact": {
-        const { entityId, filePath: hintFilePath } = AnalyzeCodeImpactSchema.parse(args);
+        const { entityId, filePath: hintFilePath, product_id } = AnalyzeCodeImpactSchema.parse(args);
         const storage = await getGraphStorage(globalSQLiteManager);
         const resolvedHintPath = hintFilePath ? normalizeInputPath(hintFilePath) : undefined;
 
@@ -2280,7 +2280,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
           };
         }
 
-        const relationships = await storage.getRelationshipsForEntity(entity.id);
+        const relationships = await storage.getRelationshipsForEntity(entity.id, undefined, product_id);
         const directIds = new Set<string>();
         const outboundIds = new Set<string>();
 
@@ -2299,7 +2299,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
 
         const indirectIds = new Set<string>();
         for (const direct of directEntities) {
-          const rels = await storage.getRelationshipsForEntity(direct.id);
+          const rels = await storage.getRelationshipsForEntity(direct.id, undefined, product_id);
           for (const rel of rels) {
             const candidate = rel.fromId === direct.id ? rel.toId : rel.fromId;
             if (candidate !== entity.id && !directIds.has(candidate)) {
