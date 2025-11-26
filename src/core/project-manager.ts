@@ -439,4 +439,30 @@ export class ProjectManager {
       metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
     };
   }
+
+  /**
+   * Get all repositories that match a given path (across all projects)
+   * Used for auto-detecting product_id during indexing
+   */
+  getRepositoriesByPath(repositoryPath: string): ProjectRepository[] {
+    const db = this.sqliteManager.getConnection();
+
+    const rows = db
+      .prepare(`
+      SELECT id, project_id, repository_path, repository_name, added_at, last_indexed, metadata
+      FROM project_repositories
+      WHERE repository_path = ?
+    `)
+      .all(repositoryPath) as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      repository_path: row.repository_path,
+      repository_name: row.repository_name,
+      added_at: row.added_at,
+      last_indexed: row.last_indexed,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+    }));
+  }
 }

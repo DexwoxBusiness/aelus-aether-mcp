@@ -1109,8 +1109,33 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
   try {
     switch (name) {
       case "index": {
-        const { directory: indexDir, incremental, excludePatterns, reset, fullScan } = IndexToolSchema.parse(args);
+        const { directory: indexDir, incremental, excludePatterns, reset, fullScan, product_id } = IndexToolSchema.parse(args);
         const targetDir = indexDir || directory;
+
+        // Auto-detect product_id from project_repositories table if not provided
+        let resolvedProductId = product_id;
+        if (!resolvedProductId) {
+          const normalizedPath = normalizeInputPath(targetDir);
+          if (normalizedPath) {
+            const repos = projectManager.getRepositoriesByPath(normalizedPath);
+            if (repos.length === 1) {
+              resolvedProductId = repos[0].project_id;
+              logger.info(
+                "INDEXING",
+                "Auto-detected product from repository path",
+                { product_id: resolvedProductId, path: normalizedPath },
+                requestId,
+              );
+            } else if (repos.length > 1) {
+              logger.warn(
+                "INDEXING",
+                "Repository belongs to multiple products - indexing without product_id",
+                { path: normalizedPath, product_count: repos.length },
+                requestId,
+              );
+            }
+          }
+        }
 
         // Optional reset
         if (reset) {
@@ -1221,6 +1246,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
             directory: targetDir,
             incremental,
             excludePatterns: enhancedExcludePatterns,
+            product_id: resolvedProductId, // Pass product_id to indexer
           },
           createdAt: Date.now(),
         };
@@ -1263,6 +1289,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
                 {
                   success: true,
                   message: "Indexing completed",
+                  product_id: resolvedProductId,
                   result,
                 },
                 null,
