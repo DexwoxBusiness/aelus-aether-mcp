@@ -3012,21 +3012,27 @@ async function main() {
     });
 
     // ===== HTTP API Routes =====
+    // Create a router for API routes to isolate error handling
+    const apiRouter = express.default.Router();
+
     // Add request logging middleware for API routes
-    app.use("/api", requestLogger);
+    apiRouter.use(requestLogger);
 
     // Register all HTTP API routes
-    app.use("/api/index", indexRoutes);
-    app.use("/api/semantic", semanticRoutes);
-    app.use("/api/analysis", analysisRoutes);
-    app.use("/api/graph", graphRoutes);
-    app.use("/api/agents", agentsRoutes);
-    app.use("/api/lerna", lernaRoutes);
-    app.use("/api/projects", projectsRoutes);
+    apiRouter.use("/index", indexRoutes);
+    apiRouter.use("/semantic", semanticRoutes);
+    apiRouter.use("/analysis", analysisRoutes);
+    apiRouter.use("/graph", graphRoutes);
+    apiRouter.use("/agents", agentsRoutes);
+    apiRouter.use("/lerna", lernaRoutes);
+    apiRouter.use("/projects", projectsRoutes);
 
-    // Error handling for API routes
-    app.use("/api", notFoundHandler);
-    app.use(errorHandler);
+    // Error handling for API routes (contained within router)
+    apiRouter.use(notFoundHandler);
+    apiRouter.use(errorHandler);
+
+    // Mount the API router
+    app.use("/api", apiRouter);
 
     // Start HTTP server
     app.listen(PORT, HOST, () => {

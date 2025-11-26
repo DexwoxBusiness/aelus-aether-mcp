@@ -55,6 +55,11 @@ function formatErrorResponse(error: ApiError, requestId?: string) {
  * Error handling middleware
  */
 export function errorHandler(err: ApiError, req: Request, res: Response, _next: NextFunction) {
+  // Prevent "headers already sent" errors for SSE/streaming responses
+  if (res.headersSent) {
+    return;
+  }
+
   const requestId = res.locals.requestId || (req.headers["x-request-id"] as string);
 
   // Log error
@@ -122,6 +127,11 @@ export function errorHandler(err: ApiError, req: Request, res: Response, _next: 
  * 404 Not Found handler
  */
 export function notFoundHandler(req: Request, res: Response) {
+  // Prevent "headers already sent" errors for SSE/streaming responses
+  if (res.headersSent) {
+    return;
+  }
+
   res.status(404).json({
     success: false,
     error: {
