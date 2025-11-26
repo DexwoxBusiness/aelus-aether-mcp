@@ -51,6 +51,16 @@ import { ConfigLoader, initializeConfig, validateConfig } from "./config/yaml-co
 import { knowledgeBus } from "./core/knowledge-bus.js";
 import { ProjectManager } from "./core/project-manager.js";
 import { resourceManager } from "./core/resource-manager.js";
+import { errorHandler, notFoundHandler } from "./http/middleware/error.js";
+import { requestLogger } from "./http/middleware/request-logger.js";
+import agentsRoutes from "./http/routes/agents.js";
+import analysisRoutes from "./http/routes/analysis.js";
+import graphRoutes from "./http/routes/graph.js";
+// HTTP API routes for SSE mode integration
+import indexRoutes from "./http/routes/index.js";
+import lernaRoutes from "./http/routes/lerna.js";
+import projectsRoutes from "./http/routes/projects.js";
+import semanticRoutes from "./http/routes/semantic.js";
 import { getGraphStorage, initializeGraphStorage } from "./storage/graph-storage-factory.js";
 import { getSQLiteManager } from "./storage/sqlite-manager.js";
 import { collectAgentMetrics } from "./tools/agent-metrics.js";
@@ -2895,7 +2905,9 @@ async function main() {
     const PORT = parseInt(process.env.PORT || "3000", 10);
     const HOST = process.env.HOST || "0.0.0.0";
 
-    app.use(express.default.json());
+    // Request parsing - increased limit for API routes
+    app.use(express.default.json({ limit: "10mb" }));
+    app.use(express.default.urlencoded({ extended: true, limit: "10mb" }));
     app.use(
       cors.default({
         origin: process.env.CORS_ORIGINS?.split(",") || "*",
@@ -2983,6 +2995,15 @@ async function main() {
           sse: `http://${HOST}:${PORT}/sse`,
           messages: `http://${HOST}:${PORT}/messages`,
           health: `http://${HOST}:${PORT}/health`,
+          api: {
+            projects: `http://${HOST}:${PORT}/api/projects`,
+            index: `http://${HOST}:${PORT}/api/index`,
+            semantic: `http://${HOST}:${PORT}/api/semantic`,
+            analysis: `http://${HOST}:${PORT}/api/analysis`,
+            graph: `http://${HOST}:${PORT}/api/graph`,
+            agents: `http://${HOST}:${PORT}/api/agents`,
+            lerna: `http://${HOST}:${PORT}/api/lerna`,
+          },
         },
         usage: {
           n8n: `Configure MCP node with: http://localhost:${PORT}/sse`,
@@ -2990,12 +3011,36 @@ async function main() {
       });
     });
 
+    // ===== HTTP API Routes =====
+    // Add request logging middleware for API routes
+    app.use("/api", requestLogger);
+
+    // Register all HTTP API routes
+    app.use("/api/index", indexRoutes);
+    app.use("/api/semantic", semanticRoutes);
+    app.use("/api/analysis", analysisRoutes);
+    app.use("/api/graph", graphRoutes);
+    app.use("/api/agents", agentsRoutes);
+    app.use("/api/lerna", lernaRoutes);
+    app.use("/api/projects", projectsRoutes);
+
+    // Error handling for API routes
+    app.use("/api", notFoundHandler);
+    app.use(errorHandler);
+
     // Start HTTP server
     app.listen(PORT, HOST, () => {
       console.log(`\n🚀 MCP SSE Server Ready`);
       console.log(`   SSE Endpoint:      http://${HOST}:${PORT}/sse`);
       console.log(`   Messages Endpoint: http://${HOST}:${PORT}/messages`);
       console.log(`   Health Check:      http://${HOST}:${PORT}/health`);
+      console.log(`\n📡 HTTP API Endpoints:`);
+      console.log(`   Projects:  http://${HOST}:${PORT}/api/projects`);
+      console.log(`   Index:     http://${HOST}:${PORT}/api/index`);
+      console.log(`   Semantic:  http://${HOST}:${PORT}/api/semantic`);
+      console.log(`   Analysis:  http://${HOST}:${PORT}/api/analysis`);
+      console.log(`   Graph:     http://${HOST}:${PORT}/api/graph`);
+      console.log(`   Agents:    http://${HOST}:${PORT}/api/agents`);
       console.log(`\n📡 n8n Configuration:`);
       console.log(`   MCP Server URL: http://localhost:${PORT}/sse\n`);
 
@@ -3005,6 +3050,7 @@ async function main() {
         directory,
         transport: "sse",
         toolsCount: 24,
+        apiRoutesEnabled: true,
         readyTime: Date.now(),
       });
     });
