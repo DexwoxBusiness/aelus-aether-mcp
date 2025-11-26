@@ -49,6 +49,7 @@ import { ConductorOrchestrator } from "./agents/conductor-orchestrator.js";
 // TASK-001: Import new YAML configuration system
 import { ConfigLoader, initializeConfig, validateConfig } from "./config/yaml-config.js";
 import { knowledgeBus } from "./core/knowledge-bus.js";
+import { ProjectManager } from "./core/project-manager.js";
 import { resourceManager } from "./core/resource-manager.js";
 import { getGraphStorage, initializeGraphStorage } from "./storage/graph-storage-factory.js";
 import { getSQLiteManager } from "./storage/sqlite-manager.js";
@@ -351,6 +352,10 @@ globalSQLiteManager.initialize();
 // Initialize global GraphStorage
 console.log("[Main] Initializing global GraphStorage");
 await initializeGraphStorage(globalSQLiteManager);
+
+// Initialize global ProjectManager
+console.log("[Main] Initializing global ProjectManager");
+const projectManager = new ProjectManager(globalSQLiteManager);
 
 // Initialize logging system with config
 logger.systemEvent("MCP Server Starting", {
@@ -679,6 +684,7 @@ const IndexToolSchema = z.object({
   directory: z.string().describe("Directory to index").optional(),
   incremental: z.boolean().describe("Perform incremental indexing").optional().default(false),
   reset: z.boolean().describe("Clear existing graph before indexing").optional().default(false),
+  product_id: z.string().optional().describe("Product ID to associate indexed entities with. If not provided, will auto-detect from project_repositories table."),
   excludePatterns: z.array(z.string()).describe("Patterns to exclude").optional().default([
     // Standard ignore patterns for large codebases
     "node_modules/**",
@@ -742,6 +748,7 @@ const ListRelationshipsToolSchema = z
     filePath: z.string().optional().describe("Optional file path hint to disambiguate entity"),
     depth: z.number().optional().default(1).describe("Depth of relationship traversal"),
     relationshipTypes: z.array(z.string()).optional().describe("Types of relationships to include"),
+    product_id: z.string().optional().describe("Filter relationships to specific product"),
   })
   .refine((value) => Boolean(value.entityId || value.entityName), {
     message: "Provide either entityId or entityName",
@@ -751,29 +758,34 @@ const ListRelationshipsToolSchema = z
 const QueryToolSchema = z.object({
   query: z.string().describe("Natural language or structured query"),
   limit: z.number().describe("Maximum number of results").optional().default(10),
+  product_id: z.string().optional().describe("Filter results to specific product"),
 });
 
 // New semantic tool schemas - TASK-002
 const SemanticSearchSchema = z.object({
   query: z.string().describe("Natural language search query"),
   limit: z.number().optional().default(10).describe("Maximum results to return"),
+  product_id: z.string().optional().describe("Filter results to specific product for cross-repo search"),
 });
 
 const FindSimilarCodeSchema = z.object({
   code: z.string().describe("Code snippet to find similar code for"),
   threshold: z.number().optional().default(0.5).describe("Similarity threshold (0-1)"),
   limit: z.number().optional().default(10).describe("Maximum results to return"),
+  product_id: z.string().optional().describe("Filter results to specific product"),
 });
 
 const AnalyzeCodeImpactSchema = z.object({
   entityId: z.string().describe("Entity ID or name to analyze impact for"),
   filePath: z.string().optional().describe("Optional file path hint to disambiguate entity"),
   depth: z.number().optional().default(2).describe("Depth of impact analysis"),
+  product_id: z.string().optional().describe("Filter impact analysis to specific product for cross-repo impact detection"),
 });
 
 const DetectCodeClonesSchema = z.object({
   minSimilarity: z.number().optional().default(0.8).describe("Minimum similarity for clones"),
   scope: z.string().optional().default("all").describe("Scope: all, file, or module"),
+  product_id: z.string().optional().describe("Filter clone detection to specific product"),
 });
 
 const JscpdCloneDetectionSchema = z.object({
@@ -801,6 +813,7 @@ const SuggestRefactoringSchema = z
     entityId: z.string().optional().describe("Exact entity ID to analyze"),
     startLine: z.number().int().min(1).optional().describe("1-based start line for manual selection"),
     endLine: z.number().int().min(1).optional().describe("1-based end line (exclusive)"),
+    product_id: z.string().optional().describe("Product context for refactoring suggestions"),
   })
   .refine(
     (v) =>
@@ -815,21 +828,25 @@ const SuggestRefactoringSchema = z
 const CrossLanguageSearchSchema = z.object({
   query: z.string().describe("Search query"),
   languages: z.array(z.string()).optional().describe("Languages to search in"),
+  product_id: z.string().optional().describe("Filter search to specific product for cross-repo multi-language search"),
 });
 
 const AnalyzeHotspotsSchema = z.object({
   metric: z.string().optional().default("complexity").describe("Metric: complexity, changes, or coupling"),
   limit: z.number().optional().default(10).describe("Maximum hotspots to return"),
+  product_id: z.string().optional().describe("Filter hotspots to specific product"),
 });
 
 const FindRelatedConceptsSchema = z.object({
   entityId: z.string().describe("Entity to find related concepts for"),
   limit: z.number().optional().default(10).describe("Maximum results to return"),
+  product_id: z.string().optional().describe("Filter related concepts to specific product for feature boundary detection"),
 });
 
 const GetGraphSchema = z.object({
   query: z.string().optional().describe("Optional search query"),
   limit: z.number().optional().default(100).describe("Maximum entities to return"),
+  product_id: z.string().optional().describe("Filter graph to specific product"),
 });
 
 const GetGraphStatsSchema = z.object({});
@@ -853,6 +870,48 @@ const ClearBusTopicSchema = z.object({
     .string()
     .min(1)
     .describe("Exact knowledge bus topic to clear (use wildcards via knowledgeBus.query for inspection)"),
+});
+
+// Product Intelligence Management Schemas
+const CreateProductSchema = z.object({
+  name: z.string().min(1).max(255).describe("Product name"),
+  description: z.string().optional().describe("Product description"),
+  metadata: z
+    .object({
+      domain: z.string().optional().describe("Business domain (e.g., e-commerce, fintech)"),
+      architecture_type: z.string().optional().describe("Architecture type (monolith, microservices, serverless)"),
+      tech_stack: z.array(z.string()).optional().describe("Technologies used"),
+      owner: z.string().optional().describe("Product owner"),
+      tags: z.array(z.string()).optional().describe("Product tags"),
+    })
+    .passthrough()
+    .optional()
+    .describe("Product metadata"),
+});
+
+const AddRepositoryToProductSchema = z.object({
+  product_id: z.string().describe("Product ID to add repository to"),
+  repository_path: z.string().min(1).describe("Absolute path to repository"),
+  repository_name: z.string().optional().describe("Repository display name"),
+  repository_type: z
+    .enum(["frontend", "backend", "mobile", "shared", "other"])
+    .optional()
+    .describe("Type of repository"),
+  metadata: z
+    .object({
+      framework: z.string().optional(),
+      language: z.string().optional(),
+      entry_points: z.array(z.string()).optional(),
+    })
+    .passthrough()
+    .optional()
+    .describe("Repository metadata"),
+});
+
+const ListProductsSchema = z.object({
+  name: z.string().optional().describe("Filter by name (partial match)"),
+  limit: z.number().int().positive().max(1000).optional().default(100).describe("Maximum results"),
+  offset: z.number().int().min(0).optional().default(0).describe("Offset for pagination"),
 });
 
 // Convenience tool: clean index (reset + index)
@@ -1025,6 +1084,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "clear_bus_topic",
         description: "Remove cached knowledge entries for a specific topic",
         inputSchema: zodToJsonSchema(ClearBusTopicSchema) as any,
+      },
+      // Product Intelligence Management Tools
+      {
+        name: "create_product",
+        description: "Create a new product/project container for multi-repository management",
+        inputSchema: zodToJsonSchema(CreateProductSchema) as any,
+      },
+      {
+        name: "add_repository_to_product",
+        description: "Add a repository to an existing product for cross-repo analysis and indexing",
+        inputSchema: zodToJsonSchema(AddRepositoryToProductSchema) as any,
+      },
+      {
+        name: "list_products",
+        description: "List all products/projects with optional filtering",
+        inputSchema: zodToJsonSchema(ListProductsSchema) as any,
       },
     ],
   };
@@ -2469,6 +2544,122 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
                   success: true,
                   topicCleared: topic,
                   stats,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      // Product Intelligence Management Tools
+      case "create_product": {
+        const { name: productName, description, metadata } = CreateProductSchema.parse(args);
+        const product = projectManager.createProject({
+          name: productName,
+          description,
+          metadata,
+        });
+
+        logger.info("PRODUCT_CREATED", "Created new product", { product_id: product.id, name: productName }, requestId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: true,
+                  product,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      case "add_repository_to_product": {
+        const { product_id, repository_path, repository_name, repository_type, metadata } =
+          AddRepositoryToProductSchema.parse(args);
+
+        const normalizedPath = normalizeInputPath(repository_path);
+        if (!normalizedPath) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: `Invalid repository path: ${repository_path}`,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        }
+
+        const repository = projectManager.addRepository(product_id, {
+          repository_path: normalizedPath,
+          repository_name,
+          metadata: {
+            ...metadata,
+            repository_type,
+          },
+        });
+
+        logger.info(
+          "REPOSITORY_ADDED",
+          "Added repository to product",
+          { product_id, repository_id: repository.id, path: normalizedPath },
+          requestId,
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: true,
+                  repository,
+                  message: `Repository added to product. Use index tool with product_id="${product_id}" to index this repository.`,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      case "list_products": {
+        const { name: filterName, limit, offset } = ListProductsSchema.parse(args);
+
+        const projects = projectManager.listProjects({
+          name: filterName,
+          limit,
+          offset,
+        });
+
+        logger.info("PRODUCTS_LISTED", "Listed products", { count: projects.length, offset, limit }, requestId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: true,
+                  products: projects,
+                  total: projects.length,
+                  limit,
+                  offset,
                 },
                 null,
                 2,
