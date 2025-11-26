@@ -10,6 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/error.js";
 import { validateBody, validateQuery } from "../middleware/validation.js";
+import { executeTool, parseToolResult } from "../utils/tool-executor.js";
 
 const router = Router();
 
@@ -109,20 +110,13 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const requestId = res.locals.requestId;
 
-    // TODO: Get ProjectManager instance from request context
-    // For now, return placeholder
-    const project = {
-      id: "proj_placeholder",
-      name: req.body.name,
-      description: req.body.description,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-      metadata: req.body.metadata,
-    };
+    // Call create_product MCP tool
+    const result = await executeTool("create_product", req.body, requestId);
+    const parsed = parseToolResult(result);
 
     res.status(201).json({
       success: true,
-      data: project,
+      data: parsed,
       meta: { requestId },
     });
   }),
@@ -138,17 +132,13 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const requestId = res.locals.requestId;
 
-    // TODO: Get ProjectManager instance and list projects
-    const projects: any[] = [];
+    // Call list_products MCP tool
+    const result = await executeTool("list_products", {}, requestId);
+    const parsed = parseToolResult(result) as any;
 
     res.json({
       success: true,
-      data: {
-        projects,
-        total: projects.length,
-        limit: req.query.limit,
-        offset: req.query.offset,
-      },
+      data: parsed,
       meta: { requestId },
     });
   }),
@@ -294,19 +284,22 @@ router.post(
     const requestId = res.locals.requestId;
     const { id } = req.params;
 
-    // TODO: Get ProjectManager instance and add repository
-    const repository = {
-      id: "repo_placeholder",
-      project_id: id,
-      repository_path: req.body.repository_path,
-      repository_name: req.body.repository_name || "unnamed-repo",
-      added_at: Date.now(),
-      metadata: req.body.metadata,
-    };
+    // Call add_repository_to_product MCP tool
+    const result = await executeTool(
+      "add_repository_to_product",
+      {
+        product_id: id,
+        repository_path: req.body.repository_path,
+        repository_name: req.body.repository_name,
+        metadata: req.body.metadata,
+      },
+      requestId,
+    );
+    const parsed = parseToolResult(result);
 
     res.status(201).json({
       success: true,
-      data: repository,
+      data: parsed,
       meta: { requestId },
     });
   }),
