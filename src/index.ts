@@ -1565,7 +1565,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
       }
 
       case "query": {
-        const { query, limit } = QueryToolSchema.parse(args);
+        const { query, limit, product_id } = QueryToolSchema.parse(args);
         await ensureSemanticsReady(1, 20000);
         const timeoutMs = config.mcp.agents?.defaultTimeout || config.mcp.server?.timeout || 30000;
         let semanticResult: unknown = [];
@@ -1573,7 +1573,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
         try {
           const semanticAgent = await getSemanticAgent();
           semanticResult = await withTimeout(
-            semanticAgent.semanticSearch(query, limit),
+            semanticAgent.semanticSearch(query, limit, product_id),
             timeoutMs,
             "query:semantic_search",
             requestId,
@@ -1589,7 +1589,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
         }
 
         const storage = await getGraphStorage(globalSQLiteManager);
-        const structural = await queryGraphEntities(storage, query, limit ?? 10);
+        const structural = await queryGraphEntities(storage, query, limit ?? 10, product_id);
 
         return {
           content: [
@@ -2221,11 +2221,11 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
       }
 
       case "get_graph": {
-        const { query, limit } = GetGraphSchema.parse(args);
+        const { query, limit, product_id } = GetGraphSchema.parse(args);
 
         // Use direct database query instead of going through agents
         const storage = await getGraphStorage(globalSQLiteManager);
-        const result = await queryGraphEntities(storage, query, limit);
+        const result = await queryGraphEntities(storage, query, limit, product_id);
 
         logger.info(
           "GRAPH_QUERY",
