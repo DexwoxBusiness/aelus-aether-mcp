@@ -65,6 +65,7 @@ export interface Entity {
   name: string;
   type: EntityType;
   filePath: string;
+  project_id?: string; // Product/Project ID for multi-repo support
   location: {
     start: { line: number; column: number; index: number };
     end: { line: number; column: number; index: number };
@@ -112,6 +113,7 @@ export interface Relationship {
   fromId: string;
   toId: string;
   type: RelationType;
+  project_id?: string; // Product/Project ID for multi-repo support
   metadata?: {
     line?: number;
     column?: number;

@@ -98,12 +98,12 @@ export class GraphStorageImpl implements GraphStorage {
    * Prepare frequently used statements
    */
   private prepareStatements(): void {
-    // Enhanced entity operations with v2 fields
+    // Enhanced entity operations with v2 fields + project_id
     this.statements.insertEntity = this.db.prepare(`
       INSERT INTO entities
       (id, name, type, file_path, location, metadata, hash, created_at, updated_at,
-       complexity_score, language, size_bytes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       complexity_score, language, size_bytes, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         type = excluded.type,
@@ -114,7 +114,8 @@ export class GraphStorageImpl implements GraphStorage {
         updated_at = excluded.updated_at,
         complexity_score = excluded.complexity_score,
         language = excluded.language,
-        size_bytes = excluded.size_bytes
+        size_bytes = excluded.size_bytes,
+        project_id = COALESCE(excluded.project_id, entities.project_id)
     `);
 
     this.statements.updateEntity = this.db.prepare(`
@@ -132,11 +133,11 @@ export class GraphStorageImpl implements GraphStorage {
       SELECT * FROM entities WHERE id = ?
     `);
 
-    // Enhanced relationship operations with v2 fields
+    // Enhanced relationship operations with v2 fields + project_id
     this.statements.insertRelationship = this.db.prepare(`
       INSERT INTO relationships
-      (id, from_id, to_id, type, metadata, weight, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id, from_id, to_id, type, metadata, weight, created_at, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         metadata = COALESCE(excluded.metadata, relationships.metadata),
         weight = excluded.weight
