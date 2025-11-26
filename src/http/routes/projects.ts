@@ -129,7 +129,7 @@ router.post(
 router.get(
   "/",
   validateQuery(ListProjectsQuerySchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const requestId = res.locals.requestId;
 
     // Call list_products MCP tool

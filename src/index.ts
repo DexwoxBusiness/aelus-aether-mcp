@@ -684,7 +684,12 @@ const IndexToolSchema = z.object({
   directory: z.string().describe("Directory to index").optional(),
   incremental: z.boolean().describe("Perform incremental indexing").optional().default(false),
   reset: z.boolean().describe("Clear existing graph before indexing").optional().default(false),
-  product_id: z.string().optional().describe("Product ID to associate indexed entities with. If not provided, will auto-detect from project_repositories table."),
+  product_id: z
+    .string()
+    .optional()
+    .describe(
+      "Product ID to associate indexed entities with. If not provided, will auto-detect from project_repositories table.",
+    ),
   excludePatterns: z.array(z.string()).describe("Patterns to exclude").optional().default([
     // Standard ignore patterns for large codebases
     "node_modules/**",
@@ -779,7 +784,10 @@ const AnalyzeCodeImpactSchema = z.object({
   entityId: z.string().describe("Entity ID or name to analyze impact for"),
   filePath: z.string().optional().describe("Optional file path hint to disambiguate entity"),
   depth: z.number().optional().default(2).describe("Depth of impact analysis"),
-  product_id: z.string().optional().describe("Filter impact analysis to specific product for cross-repo impact detection"),
+  product_id: z
+    .string()
+    .optional()
+    .describe("Filter impact analysis to specific product for cross-repo impact detection"),
 });
 
 const DetectCodeClonesSchema = z.object({
@@ -840,7 +848,10 @@ const AnalyzeHotspotsSchema = z.object({
 const FindRelatedConceptsSchema = z.object({
   entityId: z.string().describe("Entity to find related concepts for"),
   limit: z.number().optional().default(10).describe("Maximum results to return"),
-  product_id: z.string().optional().describe("Filter related concepts to specific product for feature boundary detection"),
+  product_id: z
+    .string()
+    .optional()
+    .describe("Filter related concepts to specific product for feature boundary detection"),
 });
 
 const GetGraphSchema = z.object({
@@ -1109,7 +1120,14 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
   try {
     switch (name) {
       case "index": {
-        const { directory: indexDir, incremental, excludePatterns, reset, fullScan, product_id } = IndexToolSchema.parse(args);
+        const {
+          directory: indexDir,
+          incremental,
+          excludePatterns,
+          reset,
+          fullScan,
+          product_id,
+        } = IndexToolSchema.parse(args);
         const targetDir = indexDir || directory;
 
         // Auto-detect product_id from project_repositories table if not provided
@@ -1118,7 +1136,7 @@ async function executeToolCall(name: string, args: unknown, requestId: string, s
           const normalizedPath = normalizeInputPath(targetDir);
           if (normalizedPath) {
             const repos = projectManager.getRepositoriesByPath(normalizedPath);
-            if (repos.length === 1) {
+            if (repos.length === 1 && repos[0]) {
               resolvedProductId = repos[0].project_id;
               logger.info(
                 "INDEXING",
