@@ -40,7 +40,8 @@ import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { CallToolRequestSchema, isInitializeRequest, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 // Schema and Node.js built-ins
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -2919,8 +2920,93 @@ async function main() {
       }),
     );
 
-    // Store active transports
-    const transports = new Map<string, SSEServerTransport>();
+    // Store active transports (supports both SSE and Streamable HTTP)
+    const transports = new Map<string, SSEServerTransport | StreamableHTTPServerTransport>();
+
+    // =============================================================================
+    // STREAMABLE HTTP TRANSPORT (Protocol version 2025-03-26) - for n8n compatibility
+    // =============================================================================
+    app.all("/mcp", async (req, res): Promise<void> => {
+      const requestId = randomUUID();
+      logger.info("MCP_STREAMABLE", `Received ${req.method} request to /mcp`, { method: req.method }, requestId);
+
+      try {
+        // Check for existing session ID
+        const sessionId = req.headers["mcp-session-id"] as string | undefined;
+        let transport: StreamableHTTPServerTransport;
+
+        if (sessionId && transports.has(sessionId)) {
+          const existingTransport = transports.get(sessionId);
+          if (existingTransport instanceof StreamableHTTPServerTransport) {
+            transport = existingTransport;
+          } else {
+            res.status(400).json({
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "Bad Request: Session exists but uses a different transport protocol",
+              },
+              id: null,
+            });
+            return;
+          }
+        } else if (!sessionId && req.method === "POST" && isInitializeRequest(req.body)) {
+          // New session initialization
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (newSessionId) => {
+              logger.info(
+                "MCP_SESSION",
+                `StreamableHTTP session initialized: ${newSessionId}`,
+                { sessionId: newSessionId },
+                requestId,
+              );
+              transports.set(newSessionId, transport);
+            },
+          });
+
+          transport.onclose = () => {
+            const sid = transport.sessionId;
+            if (sid && transports.has(sid)) {
+              logger.info("MCP_CLOSED", `StreamableHTTP session closed: ${sid}`, { sessionId: sid }, requestId);
+              transports.delete(sid);
+            }
+          };
+
+          // Connect to the MCP server
+          await server.connect(transport);
+        } else {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Bad Request: No valid session ID provided",
+            },
+            id: null,
+          });
+          return;
+        }
+
+        // Handle the request
+        await transport.handleRequest(req as any, res as any, req.body);
+      } catch (error) {
+        logger.error("MCP_ERROR", "Error handling MCP request", {}, requestId, error as Error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: "Internal server error",
+            },
+            id: null,
+          });
+        }
+      }
+    });
+
+    // =============================================================================
+    // SSE TRANSPORT (Protocol version 2024-11-05) - legacy support
+    // =============================================================================
 
     // SSE endpoint - establishes event stream
     app.get("/sse", async (_req, res) => {
@@ -2951,9 +3037,9 @@ async function main() {
       }
     });
 
-    // Messages endpoint - receives client messages
+    // Messages endpoint - receives client messages (SSE transport only)
     app.post("/messages", async (req, res): Promise<void> => {
-      const sessionId = (req.body?.meta?.sessionId || req.headers["mcp-session-id"]) as string;
+      const sessionId = (req.body?.meta?.sessionId || req.headers["mcp-session-id"] || req.query.sessionId) as string;
       const requestId = randomUUID();
 
       if (!sessionId) {
@@ -2964,6 +3050,12 @@ async function main() {
       const transport = transports.get(sessionId);
       if (!transport) {
         res.status(404).json({ error: "Session not found" });
+        return;
+      }
+
+      // This endpoint is only for SSE transport
+      if (!(transport instanceof SSEServerTransport)) {
+        res.status(400).json({ error: "This endpoint is only for SSE transport. Use /mcp for Streamable HTTP." });
         return;
       }
 
@@ -2981,7 +3073,7 @@ async function main() {
     app.get("/health", (_req, res) => {
       res.json({
         status: "healthy",
-        transport: "sse",
+        transport: "sse+streamable",
         activeSessions: transports.size,
         directory,
         timestamp: new Date().toISOString(),
@@ -2993,11 +3085,14 @@ async function main() {
       res.json({
         name: "Code Graph RAG MCP Server",
         version: versionInfo.version,
-        transport: "HTTP+SSE",
+        transport: "HTTP+SSE+Streamable",
         protocol: "Model Context Protocol",
         endpoints: {
-          sse: `http://${HOST}:${PORT}/sse`,
-          messages: `http://${HOST}:${PORT}/messages`,
+          mcp: {
+            streamable: `http://${HOST}:${PORT}/mcp`,
+            sse: `http://${HOST}:${PORT}/sse`,
+            messages: `http://${HOST}:${PORT}/messages`,
+          },
           health: `http://${HOST}:${PORT}/health`,
           api: {
             projects: `http://${HOST}:${PORT}/api/projects`,
@@ -3010,7 +3105,8 @@ async function main() {
           },
         },
         usage: {
-          n8n: `Configure MCP node with: http://localhost:${PORT}/sse`,
+          n8n_streamable: `Configure MCP node with: http://localhost:${PORT}/mcp (HTTP Streamable)`,
+          n8n_sse: `Configure MCP node with: http://localhost:${PORT}/sse (SSE)`,
         },
       });
     });
@@ -3040,7 +3136,9 @@ async function main() {
 
     // Start HTTP server
     app.listen(PORT, HOST, () => {
-      console.log(`\n🚀 MCP SSE Server Ready`);
+      console.log(`\n🚀 MCP Server Ready`);
+      console.log(`\n📡 MCP Protocol Endpoints:`);
+      console.log(`   Streamable HTTP:   http://${HOST}:${PORT}/mcp (recommended for n8n)`);
       console.log(`   SSE Endpoint:      http://${HOST}:${PORT}/sse`);
       console.log(`   Messages Endpoint: http://${HOST}:${PORT}/messages`);
       console.log(`   Health Check:      http://${HOST}:${PORT}/health`);
@@ -3052,13 +3150,14 @@ async function main() {
       console.log(`   Graph:     http://${HOST}:${PORT}/api/graph`);
       console.log(`   Agents:    http://${HOST}:${PORT}/api/agents`);
       console.log(`\n📡 n8n Configuration:`);
-      console.log(`   MCP Server URL: http://localhost:${PORT}/sse\n`);
+      console.log(`   HTTP Streamable: http://aelus-mcp-server:3000/mcp`);
+      console.log(`   SSE (legacy):    http://aelus-mcp-server:3000/sse\n`);
 
-      logger.systemEvent("MCP SSE Server Ready", {
+      logger.systemEvent("MCP Server Ready", {
         port: PORT,
         host: HOST,
         directory,
-        transport: "sse",
+        transport: "sse+streamable",
         toolsCount: 24,
         apiRoutesEnabled: true,
         readyTime: Date.now(),
