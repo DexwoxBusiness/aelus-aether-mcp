@@ -639,7 +639,10 @@ export class VectorStore {
   private cosineSimilarity(a: Float32Array, b: Float32Array): number {
     const len = a.length;
     if (len !== b.length) {
-      throw new Error("Vectors must have the same dimension");
+      throw new Error(
+        `Vector dimension mismatch: query=${a.length}d, stored=${b.length}d. ` +
+          `Database was indexed with a different embedding model. Re-index with: POST /api/index {"reset": true}`,
+      );
     }
 
     let dotProduct = 0;
